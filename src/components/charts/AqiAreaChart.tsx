@@ -7,9 +7,15 @@
  *
  * Точки с aqi === null разрывают линию (defined) — пропуски данных честно
  * видны как разрывы, а не интерполируются.
+ *
+ * Доступность (WCAG 1.1.1, 2.1.1): рядом с SVG рендерится скрытая визуально
+ * (sr-only) текстовая альтернатива — сводка «минимум/максимум/последнее»
+ * и таблица значений (для 7/30 дней — худший час каждого дня, конвенция EPA
+ * для сводок); график фокусируем с клавиатуры, стрелки перемещают точку
+ * тултипа, текущее значение объявляется через aria-live.
  */
 
-import { useCallback, useId, useMemo } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { AxisBottom, AxisLeft } from '@visx/axis';
 import { curveMonotoneX } from '@visx/curve';
 import { LinearGradient } from '@visx/gradient';
@@ -20,6 +26,7 @@ import { AreaClosed, Bar, Line, LinePath } from '@visx/shape';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import { AQI_CATEGORIES, aqiCategory } from '@/lib/aqi';
 import type { HistoryWindow, HourlyPoint } from '@/lib/types';
+import { dailyWorstPoints, summarizeAqi } from './summary';
 
 export interface AqiAreaChartProps {
   series: HourlyPoint[];
@@ -43,20 +50,23 @@ const WINDOW_LABEL: Record<HistoryWindow, string> = {
 /** Верхние границы категорий AQI: 50, 100, 150, 200, 300, 500. */
 const CATEGORY_TOPS = AQI_CATEGORIES.map((c) => c.aqiRange[1]);
 
+/** Часовой пояс отображения — как во всём приложении. */
+const DISPLAY_TZ = 'Asia/Almaty';
+
 const HOUR_FMT = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Asia/Almaty',
+  timeZone: DISPLAY_TZ,
   hour: '2-digit',
   minute: '2-digit',
 });
 
 const DAY_FMT = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Asia/Almaty',
+  timeZone: DISPLAY_TZ,
   day: 'numeric',
   month: 'short',
 });
 
 const TOOLTIP_FULL_FMT = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Asia/Almaty',
+  timeZone: DISPLAY_TZ,
   day: 'numeric',
   month: 'short',
   hour: '2-digit',
@@ -92,6 +102,13 @@ function nearestPoint(points: ChartPoint[], ms: number): ChartPoint | null {
   return points[lo];
 }
 
+/** Текст точки для aria-live: время, AQI и категория (или «нет данных»). */
+function describePoint(point: ChartPoint, win: HistoryWindow): string {
+  const time = (win === '24h' ? HOUR_FMT : TOOLTIP_FULL_FMT).format(point.date);
+  if (point.aqi === null) return `${time}: нет данных`;
+  return `${time}: AQI ${point.aqi} — ${aqiCategory(point.aqi).shortRu}`;
+}
+
 const TOOLTIP_STYLES: React.CSSProperties = {
   position: 'absolute',
   backgroundColor: 'var(--card)',
@@ -110,9 +127,11 @@ interface ChartInnerProps {
   win: HistoryWindow;
   width: number;
   height: number;
+  /** id sr-only сводки — связывается с SVG через aria-describedby. */
+  describedBy?: string;
 }
 
-function ChartInner({ points, win, width, height }: ChartInnerProps) {
+function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps) {
   const rawId = useId();
   // useId может содержать «:» — недопустимо в url(#…)-ссылках SVG.
   const gradientId = `aqi-area-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -196,6 +215,72 @@ function ChartInner({ points, win, width, height }: ChartInnerProps) {
     hideTooltip,
   } = useTooltip<ChartPoint>();
 
+  /*
+   * Клавиатурный курсор по точкам (WCAG 2.1.1): индекс текущей точки;
+   * null — навигация не начата. Смена окна 24ч/7д/30д размонтирует ChartInner
+   * (key={win} снаружи) — курсор и тултип сбрасываются без эффектов.
+   */
+  const [focusIdx, setFocusIdx] = useState<number | null>(null);
+
+  const focusPoint = useCallback(
+    (index: number) => {
+      const clamped = Math.min(Math.max(index, 0), points.length - 1);
+      const point = points[clamped];
+      setFocusIdx(clamped);
+      showTooltip({
+        tooltipData: point,
+        tooltipLeft: MARGIN.left + xScale(point.date),
+        tooltipTop:
+          MARGIN.top + (point.aqi !== null ? yScale(point.aqi) : innerHeight / 2),
+      });
+    },
+    [points, xScale, yScale, innerHeight, showTooltip],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Старт навигации — с последней (самой свежей) точки.
+      const current = focusIdx ?? points.length - 1;
+      const started = focusIdx !== null;
+      switch (event.key) {
+        case 'ArrowRight':
+          event.preventDefault();
+          focusPoint(started ? current + 1 : current);
+          break;
+        case 'ArrowLeft':
+          event.preventDefault();
+          focusPoint(started ? current - 1 : current);
+          break;
+        case 'PageUp':
+          event.preventDefault();
+          focusPoint(started ? current + 24 : current);
+          break;
+        case 'PageDown':
+          event.preventDefault();
+          focusPoint(started ? current - 24 : current);
+          break;
+        case 'Home':
+          event.preventDefault();
+          focusPoint(0);
+          break;
+        case 'End':
+          event.preventDefault();
+          focusPoint(points.length - 1);
+          break;
+        case 'Escape':
+          setFocusIdx(null);
+          hideTooltip();
+          break;
+      }
+    },
+    [focusIdx, points.length, focusPoint, hideTooltip],
+  );
+
+  const handleBlur = useCallback(() => {
+    setFocusIdx(null);
+    hideTooltip();
+  }, [hideTooltip]);
+
   const handlePointer = useCallback(
     (event: React.PointerEvent<SVGRectElement>) => {
       // Аналог localPoint из @visx/event (пакет не в зависимостях):
@@ -227,13 +312,31 @@ function ChartInner({ points, win, width, height }: ChartInnerProps) {
 
   const crossX = tooltipData ? xScale(tooltipData.date) : 0;
 
+  const announcement =
+    focusIdx !== null && focusIdx < points.length
+      ? describePoint(points[focusIdx], win)
+      : '';
+
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      tabIndex={0}
+      role="application"
+      aria-roledescription="интерактивный график"
+      aria-label={
+        `График AQI ${WINDOW_LABEL[win]}. ` +
+        'Стрелки влево и вправо — по точкам, PageUp и PageDown — на сутки, ' +
+        'Home и End — к краям, Escape — скрыть значение.'
+      }
+      onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+    >
       <svg
         width={width}
         height={height}
         role="img"
         aria-label={`График изменения AQI ${WINDOW_LABEL[win]}`}
+        aria-describedby={describedBy}
       >
         <LinearGradient
           id={gradientId}
@@ -339,6 +442,11 @@ function ChartInner({ points, win, width, height }: ChartInnerProps) {
         </Group>
       </svg>
 
+      {/* Объявление точки клавиатурного курсора для скринридеров. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
       {tooltipOpen && tooltipData && (
         <TooltipWithBounds
           key={tooltipData.time}
@@ -371,11 +479,46 @@ function ChartInner({ points, win, width, height }: ChartInnerProps) {
   );
 }
 
+/** Скрытая визуально таблица значений — текстовая альтернатива графика. */
+function SrOnlyTable({ rows, win }: { rows: ChartPoint[]; win: HistoryWindow }) {
+  return (
+    <table className="sr-only">
+      <caption>
+        {win === '24h'
+          ? 'Значения AQI по часам за 24 часа'
+          : `Худший час каждого дня ${WINDOW_LABEL[win]}`}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Время</th>
+          <th scope="col">AQI</th>
+          <th scope="col">Категория</th>
+          <th scope="col">PM2.5, мкг/м³</th>
+          <th scope="col">PM10, мкг/м³</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr key={p.time}>
+            <th scope="row">{TOOLTIP_FULL_FMT.format(p.date)}</th>
+            <td>{p.aqi !== null ? p.aqi : 'нет данных'}</td>
+            <td>{p.aqi !== null ? aqiCategory(p.aqi).labelRu : '—'}</td>
+            <td>{p.pm25 !== null ? CONCENTRATION_FMT.format(p.pm25) : '—'}</td>
+            <td>{p.pm10 !== null ? CONCENTRATION_FMT.format(p.pm10) : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /**
  * Переиспользуемый график AQI по часовым точкам.
  * Меньше двух точек со значением — честная заглушка «Недостаточно данных».
  */
 export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
+  const summaryId = useId();
+
   const points = useMemo<ChartPoint[]>(
     () =>
       series
@@ -393,7 +536,15 @@ export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
     [points],
   );
 
-  if (definedCount < 2) {
+  const summary = useMemo(() => summarizeAqi(points), [points]);
+
+  /** Строки текстовой таблицы: 24ч — все часы, 7/30д — худший час каждого дня. */
+  const tableRows = useMemo(
+    () => (win === '24h' ? points : dailyWorstPoints(points, DISPLAY_TZ)),
+    [points, win],
+  );
+
+  if (definedCount < 2 || summary === null) {
     return (
       <div
         role="status"
@@ -407,19 +558,33 @@ export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
   }
 
   return (
-    <div className="relative h-[280px] min-h-[260px] w-full min-w-0 overflow-hidden">
-      <ParentSize debounceTime={60}>
-        {({ width, height }) =>
-          width < 60 ? null : (
-            <ChartInner
-              points={points}
-              win={win}
-              width={width}
-              height={Math.max(height, 260)}
-            />
-          )
-        }
-      </ParentSize>
-    </div>
+    <>
+      <div className="relative h-[280px] min-h-[260px] w-full min-w-0 overflow-hidden">
+        <ParentSize debounceTime={60}>
+          {({ width, height }) =>
+            width < 60 ? null : (
+              <ChartInner
+                /* Смена окна — новый инстанс: сброс клавиатурного курсора и тултипа. */
+                key={win}
+                points={points}
+                win={win}
+                width={width}
+                height={Math.max(height, 260)}
+                describedBy={summaryId}
+              />
+            )
+          }
+        </ParentSize>
+      </div>
+
+      {/* Текстовая альтернатива для скринридеров: сводка + таблица значений. */}
+      <p id={summaryId} className="sr-only">
+        {`AQI ${WINDOW_LABEL[win]}: минимум ${summary.minAqi} (${TOOLTIP_FULL_FMT.format(summary.min.ms)}), ` +
+          `максимум ${summary.maxAqi} (${TOOLTIP_FULL_FMT.format(summary.max.ms)}), ` +
+          `последнее значение ${summary.lastAqi} — ${aqiCategory(summary.lastAqi).labelRu.toLowerCase()} ` +
+          `(${TOOLTIP_FULL_FMT.format(summary.last.ms)}).`}
+      </p>
+      <SrOnlyTable rows={tableRows} win={win} />
+    </>
   );
 }

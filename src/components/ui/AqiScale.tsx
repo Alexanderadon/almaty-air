@@ -22,7 +22,13 @@ export function AqiScale({ className = '' }: AqiScaleProps) {
             <span className="block text-[11px] font-semibold tabular-nums">
               {cat.aqiRange[0]}–{cat.aqiRange[1]}
             </span>
-            <span className="block text-[11px] leading-tight text-muted">
+            {/*
+              На узких экранах ячейка ~51px (360px-вьюпорт), а «Чувствительным»
+              шире неё: hyphens-auto переносит слово по слогам (html lang="ru"),
+              break-words — страховка там, где нет словаря переносов. Без этого
+              подписи соседних сегментов накладываются друг на друга.
+            */}
+            <span className="block break-words text-[11px] leading-tight text-muted hyphens-auto">
               <span className="md:hidden">{cat.shortRu}</span>
               <span className="hidden md:inline">{cat.labelRu}</span>
             </span>

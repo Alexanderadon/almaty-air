@@ -10,6 +10,11 @@
  */
 
 import 'leaflet/dist/leaflet.css';
+import {
+  DomEvent,
+  type CircleMarker as LeafletCircleMarker,
+  type LeafletEventHandlerFnMap,
+} from 'leaflet';
 import { useMemo, useState } from 'react';
 import {
   CircleMarker,
@@ -81,6 +86,33 @@ function fillColorFor(aqi: number | null): string {
   return aqi === null ? NO_DATA_FILL : aqiCategory(aqi).color;
 }
 
+/**
+ * Клавиатурный доступ к маркеру станции: Leaflet делает фокусируемыми только
+ * иконные Marker (keyboard: true), векторные слои (CircleMarker) — нет.
+ * При добавлении слоя на карту вешаем на его SVG-путь tabindex/role/aria-label,
+ * Enter и пробел открывают попап. Слушатель живёт столько же, сколько сам
+ * SVG-элемент (уничтожается вместе со слоем) — отдельная отписка не нужна.
+ */
+function markerKeyboardHandlers(stationName: string): LeafletEventHandlerFnMap {
+  return {
+    add: (event) => {
+      const layer = event.target as LeafletCircleMarker;
+      const el = layer.getElement();
+      if (!el) return;
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `Станция мониторинга ${stationName}: показать данные`);
+      DomEvent.on(el as unknown as HTMLElement, 'keydown', (domEvent) => {
+        const key = (domEvent as KeyboardEvent).key;
+        if (key === 'Enter' || key === ' ') {
+          domEvent.preventDefault();
+          layer.openPopup();
+        }
+      });
+    },
+  };
+}
+
 /** Содержимое тултипа/попапа района: название, AQI, категория, происхождение данных. */
 function DistrictInfo({ nameRu, air }: { nameRu: string; air: DistrictAir | null }) {
   const aqi = air?.aqi ?? null;
@@ -130,11 +162,15 @@ function StationInfo({ station }: { station: StationReading }) {
 
 export default function AirMap({ districts, stations }: AirMapProps) {
   /*
-   * На сенсорных устройствах колесо/жест скролла не должны перехватываться
-   * картой — страница обязана прокручиваться. Значение фиксируется один раз:
+   * Страница обязана прокручиваться поверх карты. Точная наводка (мышь,
+   * тачпад): колесо зумит, перетаскивание двигает карту. Сенсорные экраны:
+   * scrollWheelZoom И dragging выключены — свайп одним пальцем прокручивает
+   * страницу нативно (Leaflet оставляет .leaflet-touch-zoom →
+   * touch-action: pan-x pan-y), а масштаб и перемещение карты — жестом двумя
+   * пальцами (touchZoom по умолчанию включён). Значение фиксируется один раз:
    * компонент монтируется только на клиенте (ssr:false в MapPanel).
    */
-  const [scrollWheelZoom] = useState(
+  const [finePointer] = useState(
     () =>
       typeof window !== 'undefined' &&
       window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -151,7 +187,8 @@ export default function AirMap({ districts, stations }: AirMapProps) {
     <MapContainer
       center={ALMATY_CENTER}
       zoom={11}
-      scrollWheelZoom={scrollWheelZoom}
+      scrollWheelZoom={finePointer}
+      dragging={finePointer}
       className="h-full w-full"
     >
       <TileLayer
@@ -192,7 +229,9 @@ export default function AirMap({ districts, stations }: AirMapProps) {
           <CircleMarker
             key={`${station.sourceId}-${station.stationId}`}
             center={position}
-            radius={6}
+            /* radius 9 → ~21px цель касания: попап станции реально открыть пальцем. */
+            radius={9}
+            eventHandlers={markerKeyboardHandlers(station.name)}
             pathOptions={{
               fillColor: fillColorFor(stationDisplayAqi(station)),
               fillOpacity: 0.95,
