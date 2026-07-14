@@ -1,7 +1,10 @@
 export interface SourceNoteProps {
-  /** stations — реальные сенсоры; model — модель CAMS для центроида района. */
-  origin: 'stations' | 'model';
-  /** Число станций (для origin="stations"). */
+  /**
+   * stations — реальные сенсоры; model — модель CAMS для центроида района;
+   * mixed — часть значений по станциям, остальные по модели CAMS.
+   */
+  origin: 'stations' | 'model' | 'mixed';
+  /** Число станций, реально вошедших в агрегаты (для origin "stations"/"mixed"). */
   stationCount?: number;
   className?: string;
 }
@@ -11,14 +14,23 @@ function stationsWord(n: number): string {
   return n % 10 === 1 && n % 100 !== 11 ? 'станции' : 'станций';
 }
 
-/** Пометка происхождения данных: станции мониторинга или модель CAMS. */
+function noteText(origin: SourceNoteProps['origin'], stationCount?: number): string {
+  if (origin === 'model') {
+    return 'По модели CAMS (Copernicus), сетка ~40 км — может сглаживать локальные пики';
+  }
+  const stations =
+    stationCount != null && stationCount > 0
+      ? `${stationCount} ${stationsWord(stationCount)}`
+      : 'станций';
+  if (origin === 'mixed') {
+    return `По данным ${stations} мониторинга и модели CAMS для районов без станций`;
+  }
+  return `По данным ${stations} мониторинга`;
+}
+
+/** Пометка происхождения данных: станции мониторинга, модель CAMS или их сочетание. */
 export function SourceNote({ origin, stationCount, className = '' }: SourceNoteProps) {
-  const text =
-    origin === 'model'
-      ? 'По модели CAMS (Copernicus), сетка ~40 км — может сглаживать локальные пики'
-      : stationCount != null && stationCount > 0
-        ? `По данным ${stationCount} ${stationsWord(stationCount)} мониторинга`
-        : 'По данным станций мониторинга';
+  const text = noteText(origin, stationCount);
 
   return (
     <p className={`inline-flex items-start gap-1.5 text-xs text-muted ${className}`}>

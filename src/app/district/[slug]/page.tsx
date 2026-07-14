@@ -6,6 +6,7 @@ import { AdviceCard } from '@/components/ui/AdviceCard';
 import { AqiBadge } from '@/components/ui/AqiBadge';
 import { SourceNote } from '@/components/ui/SourceNote';
 import { UpdatedAt } from '@/components/ui/UpdatedAt';
+import { assertSourcesUpDuringBuild } from '@/lib/build-guard';
 import { DISTRICTS } from '@/lib/districts';
 import { getCityAir, getDistrictHistory } from '@/lib/sources';
 import {
@@ -36,13 +37,24 @@ export async function generateMetadata({
   const { slug } = await params;
   const district = DISTRICTS.find((d) => d.slug === slug);
   if (!district) return { title: 'Район не найден' };
+  const description =
+    `${district.nameRu} Алматы: текущий индекс качества воздуха AQI, ` +
+    'концентрации PM2.5 и PM10, история за 24 часа, 7 и 30 дней ' +
+    'и рекомендации жителям.';
   return {
-    // Шаблон в layout добавляет суффикс «— Воздух Алматы».
+    // Шаблон в layout добавляет суффикс «— Воздух Алматы» к <title>, но не
+    // к og:title, а вложенный openGraph из layout заменяется целиком
+    // (не сливается по полям) — поэтому общие поля повторяем явно.
     title: district.nameRu,
-    description:
-      `${district.nameRu} Алматы: текущий индекс качества воздуха AQI, ` +
-      'концентрации PM2.5 и PM10, история за 24 часа, 7 и 30 дней ' +
-      'и рекомендации жителям.',
+    description,
+    openGraph: {
+      title: `${district.nameRu} — Воздух Алматы`,
+      description,
+      url: `/district/${district.slug}`,
+      siteName: 'Воздух Алматы',
+      locale: 'ru_RU',
+      type: 'website',
+    },
   };
 }
 
@@ -109,6 +121,10 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
     getDistrictHistory(slug, '30d'),
   ]);
 
+  // Во время `next build` полный отказ всех источников роняет сборку —
+  // иначе «Текущих данных нет» запечётся в статику на час ISR (см. главную).
+  assertSourcesUpDuringBuild(city.sources, `район ${district.nameRu}`);
+
   const air = city.districts.find((d) => d.slug === slug) ?? null;
   const stations = city.stations.filter((s) => s.districtSlug === slug);
   const historyEmpty =
@@ -137,7 +153,9 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         <div className="flex shrink-0 flex-col items-start gap-2">
           <AqiBadge aqi={air?.aqi ?? null} size="lg" />
           {air?.observedAt && <UpdatedAt iso={air.observedAt} />}
-          {air && (
+          {/* Без данных (aqi null) происхождение не заявляем: рядом уже честное
+              «Нет данных», а подпись «По модели CAMS» ему бы противоречила. */}
+          {air && air.aqi !== null && (
             <SourceNote
               origin={air.dataOrigin}
               stationCount={air.stationCount}

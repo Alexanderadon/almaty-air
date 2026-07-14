@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
+import { citySourceSummary } from '@/components/home/citySource';
 import { DistrictCard } from '@/components/home/DistrictCard';
 import { SourcesStatus } from '@/components/home/SourcesStatus';
 import { MapPanel } from '@/components/map/MapPanel';
@@ -10,6 +11,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { SourceNote } from '@/components/ui/SourceNote';
 import { UpdatedAt } from '@/components/ui/UpdatedAt';
 import { aqiCategory } from '@/lib/aqi';
+import { assertSourcesUpDuringBuild } from '@/lib/build-guard';
 import { DISTRICTS } from '@/lib/districts';
 import { getCityAir } from '@/lib/sources';
 
@@ -49,6 +51,8 @@ export default async function Home() {
 
   // Данных нет и все источники упали — честная ошибка вместо пустого героя и карты.
   if (air.citywide.aqi === null && allSourcesFailed) {
+    // Во время `next build` — красная сборка вместо запечённого на час ErrorState.
+    assertSourcesUpDuringBuild(air.sources, 'главная страница');
     return (
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 md:py-10">
         <ErrorState />
@@ -64,6 +68,9 @@ export default async function Home() {
 
   const aqi = air.citywide.aqi;
   const category = aqi === null ? null : aqiCategory(aqi);
+  // Происхождение общегородского AQI — по районам, вошедшим в медиану,
+  // а не по сырому списку станций (сенсоры вне районов в медианы не входят).
+  const heroSource = citySourceSummary(air.districts);
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 md:py-10">
@@ -90,10 +97,12 @@ export default async function Home() {
             )}
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
               <UpdatedAt iso={air.updatedAt} />
-              <SourceNote
-                origin={air.modelOnly ? 'model' : 'stations'}
-                stationCount={air.stations.length}
-              />
+              {heroSource !== null && (
+                <SourceNote
+                  origin={heroSource.origin}
+                  stationCount={heroSource.stationCount}
+                />
+              )}
             </div>
           </div>
         </div>
