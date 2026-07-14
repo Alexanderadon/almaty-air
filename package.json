@@ -9,6 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@visx/axis": "^4.0.0",
+    "@visx/curve": "^4.0.0",
+    "@visx/gradient": "^4.0.0",
+    "@visx/group": "^4.0.0",
+    "@visx/responsive": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
+    "@visx/tooltip": "^4.0.0",
     "leaflet": "^1.9.4",
     "next": "16.2.10",
     "react": "19.2.4",
