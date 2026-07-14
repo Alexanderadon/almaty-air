@@ -58,6 +58,10 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${inter.variable} h-full`}>
       <body className="flex min-h-dvh flex-col bg-surface font-sans text-foreground antialiased">
+        {/* Тайлы OSM грузит Leaflet после гидратации — ранний preconnect
+            экономит DNS+TCP+TLS на первом тайле. React 19 поднимает <link> в <head>. */}
+        <link rel="preconnect" href="https://tile.openstreetmap.org" />
+        <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
         <a
           href="#content"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:shadow-lg"

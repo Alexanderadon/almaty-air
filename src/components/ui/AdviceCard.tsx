@@ -24,7 +24,8 @@ export function AdviceCard({ aqi, className = '' }: AdviceCardProps) {
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">
         Рекомендации
       </p>
-      <h3 className="mt-1 text-base font-semibold">{cat.labelRu}</h3>
+      {/* h2: карточка идёт сразу после h1 страницы — h3 ломал порядок заголовков (axe heading-order). */}
+      <h2 className="mt-1 text-base font-semibold">{cat.labelRu}</h2>
       <p className="mt-1.5 text-sm leading-relaxed text-muted">{cat.adviceRu}</p>
     </section>
   );

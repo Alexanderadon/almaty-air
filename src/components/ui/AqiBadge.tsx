@@ -40,7 +40,7 @@ export function AqiBadge({ aqi, size = 'md', className = '' }: AqiBadgeProps) {
         className={`inline-flex items-center justify-center border border-dashed border-border bg-card text-muted ${s.root} ${className}`}
       >
         {size === 'lg' && (
-          <span aria-hidden="true" className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
+          <span aria-hidden="true" className="text-xs font-bold uppercase tracking-[0.2em]">
             AQI
           </span>
         )}
@@ -67,8 +67,10 @@ export function AqiBadge({ aqi, size = 'md', className = '' }: AqiBadgeProps) {
         color: `var(--aqi-${cat.key}-text)`,
       }}
     >
+      {/* Без opacity: на жёлтом фоне «умеренно» полупрозрачная подпись
+          давала контраст 3.7:1 < 4.5:1 (axe color-contrast). */}
       {size === 'lg' && (
-        <span aria-hidden="true" className="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
+        <span aria-hidden="true" className="text-xs font-bold uppercase tracking-[0.2em]">
           AQI
         </span>
       )}
