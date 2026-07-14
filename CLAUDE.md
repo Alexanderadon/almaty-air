@@ -30,9 +30,9 @@
 
 1. ✅ Data-слой + скелет + деплой (2026-07-14)
 2. ✅ Карта + текущий AQI (2026-07-14)
-3. ⬜ История в своей БД (решение D6: Supabase Postgres + Prisma, НЕ Neon) + `/api/collect` с секретом + cron-job.org
-4. ⬜ PWA (Serwist — НЕ next-pwa, он мёртв) + web-push (VAPID, iOS 16.4+: standalone + юзер-жест)
-5. ⬜ QA (Playwright smoke, Lighthouse ≥90/95), динамические OG-карточки, README-скриншоты, Vercel Analytics
+3. ✅ История в БД (2026-07-14): Supabase схема `almaty_air` ВНУТРИ проекта resto-miniapp (лимит 2 free-проектов; роль `almaty_air_app`, доступ только к схеме) + Prisma 7 (`postinstall: prisma generate`, клиент в `src/generated/`, gitignored) + `/api/collect` (timing-safe секрет) + **cron: GitHub Actions hourly** (`collect.yml`, секрет `COLLECT_SECRET` в repo secrets — НЕ cron-job.org, отдельная регистрация не нужна). График берёт БД при покрытии ≥80% окна, иначе модель.
+4. ✅ PWA + push (2026-07-14): Serwist (`next build --webpack` — прод-сборка НЕ turbopack), manifest + иконки (`scripts/generate-icons.mjs`), web-push VAPID (env в Vercel и `.env.local`), подписка на район, уведомление при пересечении AQI≥101 с 6ч-кулдауном. Динамические OG-карточки и Vercel Analytics тоже готовы.
+5. ⬜ QA (Playwright smoke, Lighthouse ≥90/95), README-скриншоты+GIF, включить Web Analytics в дашборде Vercel
 
 ## Шаги только для владельца (D8)
 
