@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://almaty-air.vercel.app'),
+  metadataBase: new URL('https://almaty-air-two.vercel.app'),
   title: {
     default: 'Воздух Алматы — качество воздуха в реальном времени',
     template: '%s — Воздух Алматы',

@@ -22,6 +22,10 @@
 
 `pnpm dev` / `pnpm build` / `pnpm test` (Vitest, 107+) / `pnpm typecheck` / `pnpm lint`
 
+## Деплой
+
+Прод: https://almaty-air-two.vercel.app (Vercel, scope fistin103-3986s-projects, проект almaty-air). Деплой: `npx vercel@latest --prod --yes` (CLI залогинен на машине; Vercel MCP-коннектор НЕ имеет прав создавать проекты — деплоить через CLI). Git-интеграция Vercel↔GitHub не подключена (опционально, через дашборд).
+
 ## Статус фаз (бриф §Процесс)
 
 1. ✅ Data-слой + скелет + деплой (2026-07-14)
