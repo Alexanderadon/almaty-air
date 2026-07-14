@@ -70,8 +70,43 @@ const MAX_ENDPOINT_LENGTH = 2000;
 const MAX_KEY_LENGTH = 512;
 
 /**
- * Валидация push-подписки из клиента: endpoint — https-URL, ключи p256dh/auth —
- * непустые строки разумной длины. Всё прочее — null (подписка отвергается).
+ * Хосты официальных push-сервисов браузеров (Chrome/FCM, Firefox/Mozilla,
+ * Edge/WNS, Safari/APNs). Endpoint с любым другим хостом — не подписка
+ * браузера, а потенциальный SSRF/спам-канал: наш сервер слал бы POST с
+ * VAPID-подписью на произвольный URL. Матчинг — точное имя либо суффикс
+ * с ведущей точкой (поддомены), чтобы fcm.googleapis.com.evil.example не прошёл.
+ */
+const ALLOWED_ENDPOINT_HOSTS = [
+  'fcm.googleapis.com',
+  'push.services.mozilla.com',
+  'updates.push.services.mozilla.com',
+  'notify.windows.com',
+  'push.apple.com',
+] as const;
+
+/** Хост endpoint'а разрешён: совпадает с известным push-сервисом или его поддомен. */
+export function isAllowedPushEndpointHost(hostname: string): boolean {
+  return ALLOWED_ENDPOINT_HOSTS.some(
+    (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`),
+  );
+}
+
+/**
+ * Хост endpoint'а для логов. Полный URL подписки — capability URL (владение
+ * им позволяет слать пуши этому браузеру), поэтому в логи он не попадает.
+ */
+export function endpointHostForLog(endpoint: string): string {
+  try {
+    return new URL(endpoint).hostname;
+  } catch {
+    return '<invalid-endpoint>';
+  }
+}
+
+/**
+ * Валидация push-подписки из клиента: endpoint — https-URL известного
+ * push-сервиса (см. ALLOWED_ENDPOINT_HOSTS), ключи p256dh/auth — непустые
+ * строки разумной длины. Всё прочее — null (подписка отвергается).
  */
 export function parsePushSubscription(value: unknown): ClientPushSubscription | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -88,6 +123,7 @@ export function parsePushSubscription(value: unknown): ClientPushSubscription | 
     return null;
   }
   if (url.protocol !== 'https:') return null;
+  if (!isAllowedPushEndpointHost(url.hostname)) return null;
 
   if (typeof candidate.keys !== 'object' || candidate.keys === null) return null;
   const keys = candidate.keys as { p256dh?: unknown; auth?: unknown };
@@ -259,7 +295,14 @@ export async function notifyOnDeterioration(air: CityAir): Promise<NotifyResult>
           result.removed += 1;
         } else {
           // Временный сбой доставки: подписку не трогаем, остальных не прерываем.
-          console.warn(`push: не доставлено (${district.slug}):`, error);
+          // Сырую ошибку web-push не печатаем — она содержит полный endpoint
+          // (capability URL); в лог идут только хост и статус/сообщение.
+          const reason = error instanceof Error ? error.message : String(error);
+          console.warn(
+            `push: не доставлено (${district.slug}, ` +
+              `host=${endpointHostForLog(subscription.endpoint)}, ` +
+              `status=${typeof statusCode === 'number' ? statusCode : 'n/a'}): ${reason}`,
+          );
         }
       }
     }

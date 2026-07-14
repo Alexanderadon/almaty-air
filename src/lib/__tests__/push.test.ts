@@ -12,7 +12,9 @@ import {
   UNHEALTHY_AQI,
   buildDeteriorationPayload,
   crossedIntoUnhealthy,
+  endpointHostForLog,
   getPushConfig,
+  isAllowedPushEndpointHost,
   notifyOnDeterioration,
   parsePushSubscription,
   shouldNotifySubscription,
@@ -200,7 +202,7 @@ describe('buildDeteriorationPayload — формат согласован с sw.
 
 describe('parsePushSubscription — не доверяем клиенту', () => {
   const valid = {
-    endpoint: 'https://push.example.com/sub/abc',
+    endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
     keys: { p256dh: 'p256dh-key', auth: 'auth-secret' },
   };
 
@@ -215,8 +217,11 @@ describe('parsePushSubscription — не доверяем клиенту', () =>
     ['пустой объект', {}],
     ['endpoint не строка', { ...valid, endpoint: 123 }],
     ['endpoint не URL', { ...valid, endpoint: 'not-a-url' }],
-    ['endpoint не https', { ...valid, endpoint: 'http://push.example.com/sub' }],
-    ['endpoint слишком длинный', { ...valid, endpoint: `https://x.example/${'a'.repeat(2000)}` }],
+    ['endpoint не https', { ...valid, endpoint: 'http://fcm.googleapis.com/fcm/send/abc' }],
+    [
+      'endpoint слишком длинный',
+      { ...valid, endpoint: `https://fcm.googleapis.com/${'a'.repeat(2000)}` },
+    ],
     ['без keys', { endpoint: valid.endpoint }],
     ['keys не объект', { endpoint: valid.endpoint, keys: 'nope' }],
     ['пустой p256dh', { endpoint: valid.endpoint, keys: { p256dh: '', auth: 'a' } }],
@@ -224,6 +229,47 @@ describe('parsePushSubscription — не доверяем клиенту', () =>
     ['auth слишком длинный', { endpoint: valid.endpoint, keys: { p256dh: 'k', auth: 'a'.repeat(513) } }],
   ])('мусор отклоняется: %s', (_label, value) => {
     expect(parsePushSubscription(value)).toBeNull();
+  });
+});
+
+describe('parsePushSubscription — allowlist хостов push-сервисов', () => {
+  const keys = { p256dh: 'p256dh-key', auth: 'auth-secret' };
+
+  it.each([
+    ['Chrome (FCM)', 'https://fcm.googleapis.com/fcm/send/abc123'],
+    ['Firefox (Mozilla)', 'https://push.services.mozilla.com/wpush/v2/abc'],
+    ['Firefox (updates.)', 'https://updates.push.services.mozilla.com/wpush/v2/abc'],
+    ['Edge (WNS)', 'https://notify.windows.com/w/?token=abc'],
+    ['Edge (региональный WNS)', 'https://db5p.notify.windows.com/w/?token=abc'],
+    ['Safari (APNs)', 'https://push.apple.com/v2/abc'],
+    ['Safari (поддомен APNs)', 'https://web.push.apple.com/v2/abc'],
+  ])('официальный push-сервис принимается: %s', (_label, endpoint) => {
+    expect(parsePushSubscription({ endpoint, keys })).toEqual({ endpoint, keys });
+  });
+
+  it.each([
+    ['произвольный внешний хост', 'https://evil.example/collect'],
+    ['внутренний хост (SSRF)', 'https://internal.local/'],
+    ['поддомен-спуфинг', 'https://fcm.googleapis.com.evil.example/fcm/send/abc'],
+    ['суффикс без границы поддомена', 'https://evilpush.apple.com/v2/abc'],
+  ])('чужой хост отклоняется: %s', (_label, endpoint) => {
+    expect(parsePushSubscription({ endpoint, keys })).toBeNull();
+  });
+
+  it('матчинг регистронезависим (URL нормализует хост)', () => {
+    expect(isAllowedPushEndpointHost(new URL('https://FCM.googleapis.COM/x').hostname)).toBe(true);
+  });
+});
+
+describe('endpointHostForLog — endpoint в логи не протекает', () => {
+  it('возвращает только хост, без секретного пути', () => {
+    expect(endpointHostForLog('https://fcm.googleapis.com/fcm/send/secret-token')).toBe(
+      'fcm.googleapis.com',
+    );
+  });
+
+  it('невалидный URL — маркер вместо исключения', () => {
+    expect(endpointHostForLog('not-a-url')).toBe('<invalid-endpoint>');
   });
 });
 
@@ -423,6 +469,10 @@ describe('notifyOnDeterioration — рассылка', () => {
     expect(result.notified).toBe(1);
     expect(subDeleteMany).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledOnce();
+    // Endpoint — capability URL: в лог попадает только хост, не путь подписки.
+    const logged = warn.mock.calls[0].map(String).join(' ');
+    expect(logged).toContain('push.example.com');
+    expect(logged).not.toContain('/sub/flaky');
     warn.mockRestore();
   });
 

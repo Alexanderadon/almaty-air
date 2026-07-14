@@ -15,6 +15,7 @@
  * Директива `reference lib="webworker"` добавляет типы SW к этому файлу;
  * конфликтующие с lib.dom объявления гасятся skipLibCheck (рекомендация Serwist).
  */
+import { parsePushPayload, type PushPayload } from "@/lib/push-payload";
 import type { PrecacheEntry, RuntimeCaching, SerwistGlobalConfig } from "serwist";
 import {
   CacheableResponsePlugin,
@@ -93,24 +94,22 @@ const serwist = new Serwist({
 
 serwist.addEventListeners();
 
-/** Пейлоад push-уведомления, который шлёт наш бэкенд (web-push). */
-interface PushPayload {
-  title?: string;
-  body?: string;
-  url?: string;
-  tag?: string;
-}
-
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
-  let payload: PushPayload;
+  let parsed: unknown;
   try {
-    payload = event.data.json() as PushPayload;
+    parsed = event.data.json();
   } catch {
     // Не-JSON пейлоад — игнорируем, фейковых уведомлений не показываем.
     return;
   }
+
+  // JSON-литерал `null` (или число/строка) парсится без исключения, но чтение
+  // payload.title на нём бросало бы TypeError уже вне try/catch — и уведомление
+  // молча не показывалось бы. Не-объект — не наш пейлоад, игнорируем.
+  const payload: PushPayload | null = parsePushPayload(parsed);
+  if (payload === null) return;
 
   const title = payload.title ?? "Воздух Алматы";
   event.waitUntil(

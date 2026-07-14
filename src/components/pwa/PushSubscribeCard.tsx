@@ -167,7 +167,9 @@ export function PushSubscribeCard({ slug, className = '' }: PushSubscribeCardPro
         ? await registration.pushManager.getSubscription()
         : null;
       if (subscription) {
-        await unsubscribe(subscription.endpoint);
+        // Сервер требует полную подписку (endpoint + ключи) как доказательство
+        // владения — знания одного endpoint'а для отписки недостаточно.
+        await unsubscribe(subscription.toJSON());
         await subscription.unsubscribe();
       }
       writeSubscribedDistrict(null);

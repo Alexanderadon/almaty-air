@@ -7,9 +7,18 @@
 import { DISTRICTS } from '@/lib/districts';
 import { OG_SIZE, renderAqiOgCard } from '@/lib/og/card';
 import { getCityAir } from '@/lib/sources';
+import { DISTRICT_SLUGS, type DistrictSlug } from '@/lib/types';
 
 // Слой данных (агрегатор источников) не edge-safe — рендерим в Node.js.
 export const runtime = 'nodejs';
+
+// Как и страница района: PNG запекается на сборке и обновляется через ISR
+// раз в час, а не рендерится заново на каждый запрос краулера.
+export const revalidate = 3600;
+
+export function generateStaticParams(): { slug: DistrictSlug }[] {
+  return DISTRICT_SLUGS.map((slug) => ({ slug }));
+}
 
 export const alt = 'Текущий индекс качества воздуха (AQI) в районе Алматы';
 export const size = OG_SIZE;
