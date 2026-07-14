@@ -21,6 +21,7 @@
  */
 
 import { median } from '../aqi';
+import { getDbHistory, hasDbCoverage } from '../history';
 import type {
   CityAir,
   DistrictAir,
@@ -238,12 +239,21 @@ export async function getCityAir(): Promise<CityAir> {
 }
 
 /**
- * Почасовая история района (модель CAMS через Open-Meteo).
- * При сбое источника возвращает пустой список точек, исключений не бросает.
+ * Почасовая история района: сначала собственная БД (фаза 3), при
+ * недостаточном покрытии окна или сбое БД — модель CAMS через Open-Meteo.
+ * Сбой БД страницу не роняет: ошибка логируется, работает модельный фолбэк.
  */
 export async function getDistrictHistory(
   slug: DistrictSlug,
   window: HistoryWindow,
 ): Promise<DistrictHistory> {
+  try {
+    const points = await getDbHistory(slug, window);
+    if (hasDbCoverage(points, window)) {
+      return { slug, window, origin: 'db', points };
+    }
+  } catch (error) {
+    console.warn(`История из БД недоступна (${slug}, ${window}) — фолбэк на модель CAMS:`, error);
+  }
   return fetchOpenMeteoHistory(slug, window);
 }

@@ -33,9 +33,18 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# serwist — генерируемый сервис-воркер (артефакты next build)
+/public/sw*
+/public/swe-worker*
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma — сгенерированный клиент (восстанавливается командой `pnpm db:generate`)
+/src/generated/
+
+.vercel

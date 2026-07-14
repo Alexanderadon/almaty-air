@@ -1,0 +1,48 @@
+// Схема поверх УЖЕ существующих таблиц Supabase (schema "almaty_air").
+// Таблицы созданы вручную при подготовке БД — миграции Prisma НЕ используем,
+// схема сверена с БД через `prisma db pull` (2026-07-14).
+// URL подключения CLI — в prisma.config.ts (Prisma 7), рантайм — в src/lib/db.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Почасовой срез качества воздуха по району (пишется сборщиком раз в час).
+model Reading {
+  id           BigInt   @id @default(autoincrement())
+  districtSlug String   @map("district_slug")
+  /// Начало часа (UTC), к которому относится срез.
+  ts           DateTime @db.Timestamptz(6)
+  aqi          Int?
+  pm25         Float?
+  pm10         Float?
+  /// 'stations' — по реальным сенсорам; 'model' — по модели CAMS.
+  dataOrigin   String   @map("data_origin")
+  stationCount Int      @default(0) @map("station_count")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([districtSlug, ts])
+  @@index([districtSlug, ts(sort: Desc)], map: "readings_district_ts_idx")
+  @@map("readings")
+}
+
+/// Web-push-подписка на уведомления по району.
+model PushSubscription {
+  id                   BigInt    @id @default(autoincrement())
+  districtSlug         String    @map("district_slug")
+  endpoint             String    @unique
+  p256dh               String
+  auth                 String
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastNotifiedAt       DateTime? @map("last_notified_at") @db.Timestamptz(6)
+  lastNotifiedCategory String?   @map("last_notified_category")
+
+  @@index([districtSlug], map: "push_district_idx")
+  @@map("push_subscriptions")
+}
