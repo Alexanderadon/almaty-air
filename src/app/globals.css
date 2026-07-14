@@ -24,23 +24,60 @@
   --aqi-hazardous: #4A1D4F;
   --aqi-hazardous-text: #F5D7F7;
 
-  /* --- Поверхности и текст: светлая тема --- */
+  /* --- Поверхности и текст: светлая тема (значения по умолчанию) --- */
   --surface: #F7F7F4;
   --card: #FFFFFF;
   --foreground: #22211C;
   --muted: #6C6960;
   --border: #E5E3DB;
   --accent: #2557C7;
+
+  /*
+   * --- Тёмная палитра (константы) ---
+   * Значения объявлены ОДИН раз и подключаются из двух контекстов ниже:
+   * системной тёмной темы и явного выбора html[data-theme='dark'].
+   * При правке цветов менять только этот блок.
+   */
+  --dark-surface: #101216;
+  --dark-card: #181B21;
+  --dark-foreground: #E8EAED;
+  --dark-muted: #A0A6B0;
+  --dark-border: #2A2E36;
+  --dark-accent: #8AB0F8;
+}
+
+/*
+ * Переключение темы (см. src/lib/theme.ts и ThemeToggle):
+ * - без data-theme на <html> — системная тема (media query ниже);
+ * - html[data-theme='dark'] — тёмная независимо от ОС;
+ * - html[data-theme='light'] — светлая независимо от ОС: гард
+ *   :not([data-theme='light']) отключает системный тёмный блок,
+ *   остаются значения по умолчанию из :root.
+ * Инлайн-скрипт в layout.tsx выставляет атрибут до первой отрисовки.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface: var(--dark-surface);
+  --card: var(--dark-card);
+  --foreground: var(--dark-foreground);
+  --muted: var(--dark-muted);
+  --border: var(--dark-border);
+  --accent: var(--dark-accent);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #101216;
-    --card: #181B21;
-    --foreground: #E8EAED;
-    --muted: #A0A6B0;
-    --border: #2A2E36;
-    --accent: #8AB0F8;
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --surface: var(--dark-surface);
+    --card: var(--dark-card);
+    --foreground: var(--dark-foreground);
+    --muted: var(--dark-muted);
+    --border: var(--dark-border);
+    --accent: var(--dark-accent);
   }
 }
 
@@ -101,5 +138,82 @@
   ::selection {
     background-color: var(--accent);
     color: var(--surface);
+  }
+}
+
+/* Смена иконки переключателя темы: мягкое появление (только transform/opacity,
+   без сдвига макета). Класс вешается лишь после клика — на загрузке тихо. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes theme-icon-in {
+    from {
+      opacity: 0;
+      transform: scale(0.7) rotate(-30deg);
+    }
+  }
+
+  .theme-icon-enter {
+    animation: theme-icon-in 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+/* ==========================================================================
+   Моушен-утилиты (микро-взаимодействия). Дописывать только в конец файла.
+
+   Правила слоя: только transform / opacity / box-shadow — макет не двигается
+   (CLS 0); длительности 150–300 мс, изинг cubic-bezier(0.2, 0, 0, 1);
+   всё — под prefers-reduced-motion: no-preference. Тень выведена из чёрного
+   через color-mix: на светлой теме — естественная, на тёмной не «светится»
+   (тень из --foreground на тёмной дала бы светлый ореол).
+   ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  /* Карточки (районы, FAQ): подъём на hover, возврат на active.
+     border-color включён в список: это правило вне @layer и перекрывает
+     transition-colors Tailwind — иначе рамка меняла бы цвет без перехода. */
+  .card-lift {
+    transition:
+      transform 200ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 200ms cubic-bezier(0.2, 0, 0, 1),
+      border-color 150ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 10px 24px -12px color-mix(in srgb, #000 28%, transparent),
+      0 3px 8px -4px color-mix(in srgb, #000 14%, transparent);
+  }
+
+  .card-lift:active {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+
+  /* Строки рейтинга: деликатнее карточек — внутри списка с divide-y и
+     overflow-hidden крупный сдвиг и тень дали бы артефакты на границах. */
+  .row-lift {
+    transition:
+      transform 150ms cubic-bezier(0.2, 0, 0, 1),
+      background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .row-lift:hover {
+    transform: translateY(-1px);
+  }
+
+  .row-lift:active {
+    transform: translateY(0);
+  }
+
+  /* Ответ FAQ: мягкое появление при раскрытии <details> —
+     только opacity + transform, высота не анимируется. */
+  @keyframes faq-answer-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  details[open] .faq-answer {
+    animation: faq-answer-in 200ms cubic-bezier(0.2, 0, 0, 1);
   }
 }

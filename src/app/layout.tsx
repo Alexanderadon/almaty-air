@@ -44,11 +44,27 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // themeColor остаётся media-based: meta[name=theme-color] не умеет
+  // реагировать на data-theme без JS. При ручной теме, противоположной
+  // системной, цвет статус-бара PWA может не совпасть с фоном — осознанный
+  // компромисс (затрагивает только установленное приложение).
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#F7F7F4' },
     { media: '(prefers-color-scheme: dark)', color: '#101216' },
   ],
 };
+
+/**
+ * Применяет сохранённую тему ДО первой отрисовки — без вспышки не той темы.
+ * Синхронный инлайн-скрипт первым элементом <body>: App Router не даёт
+ * писать в <head> напрямую, а парсер выполнит скрипт до отрисовки контента —
+ * эффект тот же (паттерн next-themes). try/catch — приватный режим без
+ * localStorage. Ключ и значения — см. src/lib/theme.ts (THEME_STORAGE_KEY).
+ */
+const THEME_INIT_SCRIPT = `try {
+  var t = localStorage.getItem('almaty-air-theme');
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+} catch (e) {}`;
 
 export default function RootLayout({
   children,
@@ -56,8 +72,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" className={`${inter.variable} h-full`}>
+    // suppressHydrationWarning: THEME_INIT_SCRIPT выставляет data-theme на
+    // <html> до гидратации — для React это «лишний» атрибут, гасим ложный варнинг.
+    <html lang="ru" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <body className="flex min-h-dvh flex-col bg-surface font-sans text-foreground antialiased">
+        {/* Тема из localStorage — до отрисовки контента (см. THEME_INIT_SCRIPT). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Тайлы OSM грузит Leaflet после гидратации — ранний preconnect
             экономит DNS+TCP+TLS на первом тайле. React 19 поднимает <link> в <head>. */}
         <link rel="preconnect" href="https://tile.openstreetmap.org" />

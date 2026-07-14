@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
-import { cache } from 'react';
+import { cache, type CSSProperties } from 'react';
+import { AnimatedAqi } from '@/components/home/AnimatedAqi';
 import { citySourceSummary } from '@/components/home/citySource';
 import { DistrictCard } from '@/components/home/DistrictCard';
 import { DistrictRanking } from '@/components/home/DistrictRanking';
 import { FaqSection } from '@/components/home/FaqSection';
+import { HeroSkyline } from '@/components/home/HeroSkyline';
+import { MyDistrict } from '@/components/home/MyDistrict';
 import { SourcesStatus } from '@/components/home/SourcesStatus';
 import { MapPanel } from '@/components/map/MapPanel';
 import {
@@ -22,7 +25,7 @@ import { FAQ_ITEMS } from '@/content/faq';
 import { aqiCategory } from '@/lib/aqi';
 import { assertSourcesUpDuringBuild } from '@/lib/build-guard';
 import { DISTRICTS } from '@/lib/districts';
-import { getCityAir } from '@/lib/sources';
+import { getCityAir, getDistrictHistory } from '@/lib/sources';
 
 export const revalidate = 3600;
 
@@ -57,7 +60,23 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const air = await getCityAirCached();
+  // История за 24 часа для спарклайнов — параллельно с текущими значениями.
+  // Спарклайн — прогрессивное улучшение: сбой истории района отдаёт
+  // undefined, и его карточка рендерится ровно как раньше.
+  const [air, sparkEntries] = await Promise.all([
+    getCityAirCached(),
+    Promise.all(
+      DISTRICTS.map(async (d) => {
+        try {
+          const history = await getDistrictHistory(d.slug, '24h');
+          return [d.slug, history.points] as const;
+        } catch {
+          return [d.slug, undefined] as const;
+        }
+      }),
+    ),
+  ]);
+  const sparkBySlug = new Map(sparkEntries);
   const allSourcesFailed = air.sources.every((s) => !s.ok);
 
   // Данных нет и все источники упали — честная ошибка вместо пустого героя и карты.
@@ -94,35 +113,46 @@ export default async function Home() {
       <JsonLd data={webApplicationJsonLd()} />
       <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
 
-      {/* Герой: индекс по городу */}
+      {/* Герой: индекс по городу на фоне силуэта Заилийского Алатау.
+          --hero-tint — цвет текущей категории AQI: фон тихо меняется вместе
+          с состоянием воздуха. relative + isolate + overflow-hidden держат
+          силуэт под текстом и не дают ему создать горизонтальный скролл. */}
       <section aria-labelledby="hero-heading">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center">
-          <AqiBadge aqi={aqi} size="lg" className="self-start" />
-          <div className="min-w-0 flex-1">
-            <h1 id="hero-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Качество воздуха в Алматы
-            </h1>
-            {category !== null ? (
-              <p className="mt-2 text-lg">
-                Сейчас — {category.labelRu.toLowerCase()}
-                {air.citywide.pm25 !== null && (
-                  <span className="text-muted">
-                    {' '}
-                    · PM2.5 {PM_FMT.format(air.citywide.pm25)} мкг/м³
-                  </span>
-                )}
-              </p>
-            ) : (
-              <p className="mt-2 text-lg text-muted">Текущих данных по городу пока нет.</p>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              <UpdatedAt iso={air.updatedAt} />
-              {heroSource !== null && (
-                <SourceNote
-                  origin={heroSource.origin}
-                  stationCount={heroSource.stationCount}
-                />
+        <div
+          className="relative isolate overflow-hidden"
+          style={{ '--hero-tint': category?.color ?? 'var(--accent)' } as CSSProperties}
+        >
+          <HeroSkyline />
+          <div className="flex flex-col gap-6 pb-10 md:flex-row md:items-center md:pb-12">
+            <AnimatedAqi value={aqi}>
+              <AqiBadge aqi={aqi} size="lg" className="self-start" />
+            </AnimatedAqi>
+            <div className="min-w-0 flex-1">
+              <h1 id="hero-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Качество воздуха в Алматы
+              </h1>
+              {category !== null ? (
+                <p className="mt-2 text-lg">
+                  Сейчас — {category.labelRu.toLowerCase()}
+                  {air.citywide.pm25 !== null && (
+                    <span className="text-muted">
+                      {' '}
+                      · PM2.5 {PM_FMT.format(air.citywide.pm25)} мкг/м³
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-2 text-lg text-muted">Текущих данных по городу пока нет.</p>
               )}
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <UpdatedAt iso={air.updatedAt} />
+                {heroSource !== null && (
+                  <SourceNote
+                    origin={heroSource.origin}
+                    stationCount={heroSource.stationCount}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -141,6 +171,11 @@ export default async function Home() {
         <MapPanel districts={air.districts} stations={air.stations} className="mt-4" />
       </section>
 
+      {/* Быстрый доступ «Мой район» — появляется после выбора района на его
+          странице (localStorage). Смонтирован вне секции «Районы», чтобы не
+          попадать в подсчёт восьми карточек-ссылок районов. */}
+      <MyDistrict districts={air.districts} className="mt-10" />
+
       {/* Районы */}
       <section aria-labelledby="districts-heading" className="mt-10">
         <h2 id="districts-heading" className="text-lg font-semibold tracking-tight">
@@ -152,6 +187,7 @@ export default async function Home() {
               key={district.slug}
               district={district}
               nameRu={NAME_BY_SLUG.get(district.slug) ?? district.slug}
+              spark={sparkBySlug.get(district.slug)}
             />
           ))}
         </div>

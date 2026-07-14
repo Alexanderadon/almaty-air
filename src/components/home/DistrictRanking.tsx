@@ -96,7 +96,7 @@ export function DistrictRanking({ districts, className = '' }: DistrictRankingPr
             <li key={district.slug}>
               <Link
                 href={`/district/${district.slug}`}
-                className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-surface"
+                className="row-lift flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-surface"
               >
                 <span
                   aria-hidden="true"

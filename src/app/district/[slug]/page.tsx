@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ChartTabs } from '@/components/charts/ChartTabs';
 import { CurrentAirCard } from '@/components/district/CurrentAirCard';
 import { ForecastSection } from '@/components/district/ForecastSection';
+import { MyDistrictToggle } from '@/components/district/MyDistrictToggle';
 import { ShareButton } from '@/components/district/ShareButton';
 import { computeTrend } from '@/components/district/TrendChip';
 import { PushSubscribeCard } from '@/components/pwa/PushSubscribeCard';
@@ -183,7 +184,10 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           {district.nameRu}
         </h1>
-        <ShareButton title={shareTitle} className="mt-1" />
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <MyDistrictToggle slug={slug} />
+          <ShareButton title={shareTitle} />
+        </div>
       </div>
 
       <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted">
