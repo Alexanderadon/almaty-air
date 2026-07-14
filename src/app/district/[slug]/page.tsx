@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChartTabs } from '@/components/charts/ChartTabs';
+import { PushSubscribeCard } from '@/components/pwa/PushSubscribeCard';
 import { AdviceCard } from '@/components/ui/AdviceCard';
 import { AqiBadge } from '@/components/ui/AqiBadge';
 import { SourceNote } from '@/components/ui/SourceNote';
@@ -181,6 +182,7 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
               Попробуйте обновить страницу позже.
             </p>
           )}
+          <PushSubscribeCard slug={slug} />
         </div>
       </section>
 

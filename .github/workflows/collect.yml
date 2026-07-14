@@ -1,0 +1,25 @@
+# Почасовой сбор среза качества воздуха: дергает POST /api/collect на проде.
+# Секрет COLLECT_SECRET задаётся в Settings → Secrets and variables → Actions
+# и должен совпадать с env COLLECT_SECRET проекта на Vercel.
+name: Collect air data
+
+on:
+  schedule:
+    # 7-я минута каждого часа: небольшой сдвиг от начала часа, когда
+    # cron-очереди GitHub перегружены и запуски задерживаются/пропускаются.
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/collect (с одним повтором)
+        env:
+          COLLECT_SECRET: ${{ secrets.COLLECT_SECRET }}
+        run: |
+          post() {
+            curl -sf -X POST https://almaty-air-two.vercel.app/api/collect \
+              -H "x-collect-secret: ${COLLECT_SECRET}"
+          }
+          post || { echo 'Первая попытка не удалась, повтор через 30 с…'; sleep 30; post; }
