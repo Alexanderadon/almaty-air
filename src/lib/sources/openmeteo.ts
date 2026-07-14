@@ -21,6 +21,7 @@ import type {
 } from '../types';
 import {
   errorDetail,
+  FETCH_TIMEOUT_MS,
   REVALIDATE_CURRENT,
   REVALIDATE_HISTORY,
   toIsoUtc,
@@ -32,6 +33,9 @@ const AIR_QUALITY_API = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 
 /** Глубина истории в днях по окну; forecast_days=1 добирает часы текущих суток. */
 const PAST_DAYS: Record<HistoryWindow, number> = { '24h': 2, '7d': 7, '30d': 30 };
+
+/** Точное число часовых точек в окне — ровно столько, сколько обещает подпись. */
+const KEEP_POINTS: Record<HistoryWindow, number> = { '24h': 24, '7d': 7 * 24, '30d': 30 * 24 };
 
 interface OpenMeteoCurrentBlock {
   time?: string;
@@ -86,7 +90,10 @@ export async function fetchOpenMeteoCurrent(): Promise<ProviderResult> {
     const lats = DISTRICTS.map((d) => d.centroid[0].toFixed(4)).join(',');
     const lons = DISTRICTS.map((d) => d.centroid[1].toFixed(4)).join(',');
     const url = `${AIR_QUALITY_API}?latitude=${lats}&longitude=${lons}&current=pm2_5,pm10&timezone=UTC`;
-    const init: NextFetchInit = { next: { revalidate: REVALIDATE_CURRENT } };
+    const init: NextFetchInit = {
+      next: { revalidate: REVALIDATE_CURRENT },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    };
     const res = await fetch(url, init);
     if (!res.ok) return failed(`HTTP ${res.status}`);
 
@@ -133,9 +140,10 @@ export async function fetchOpenMeteoCurrent(): Promise<ProviderResult> {
  *
  * Запрашиваем past_days по окну + forecast_days=1: у CAMS часы текущих суток
  * лежат в «прогнозном» дне. Часы позже текущего момента отсекаются (прогноз —
- * не история), затем срезаются хвостовые точки без данных; для окна «24h»
- * остаются последние 24 точки. AQI точки — из PM2.5, из PM10 только если
- * PM2.5 нет (контракт HourlyPoint). При любом сбое — пустой список точек,
+ * не история), затем срезаются хвостовые точки без данных, и окно ужимается
+ * ровно до KEEP_POINTS часов (24/168/720) — сколько обещает подпись вкладки.
+ * AQI точки — максимум из AQI(PM2.5) и AQI(PM10), правило EPA «худший
+ * загрязнитель» (контракт HourlyPoint). При любом сбое — пустой список точек,
  * исключений не бросает.
  */
 export async function fetchOpenMeteoHistory(
@@ -151,7 +159,10 @@ export async function fetchOpenMeteoHistory(
     const url =
       `${AIR_QUALITY_API}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
       `&hourly=pm2_5,pm10&past_days=${PAST_DAYS[window]}&forecast_days=1&timezone=UTC`;
-    const init: NextFetchInit = { next: { revalidate: REVALIDATE_HISTORY } };
+    const init: NextFetchInit = {
+      next: { revalidate: REVALIDATE_HISTORY },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    };
     const res = await fetch(url, init);
     if (!res.ok) return empty;
 
@@ -168,7 +179,11 @@ export async function fetchOpenMeteoHistory(
       if (Date.parse(time) > now) break; // будущие (прогнозные) часы — не история
       const pm25 = sanitizeConcentration(pm25s[i]);
       const pm10 = sanitizeConcentration(pm10s[i]);
-      const aqi = pm25 !== null ? pm25ToAqi(pm25) : pm10 !== null ? pm10ToAqi(pm10) : null;
+      // Худший из загрязнителей (правило EPA) — как в текущих значениях района.
+      const pm25Aqi = pm25 !== null ? pm25ToAqi(pm25) : null;
+      const pm10Aqi = pm10 !== null ? pm10ToAqi(pm10) : null;
+      const aqi =
+        pm25Aqi !== null && pm10Aqi !== null ? Math.max(pm25Aqi, pm10Aqi) : (pm25Aqi ?? pm10Aqi);
       points.push({ time, pm25, pm10, aqi });
     }
 
@@ -178,7 +193,7 @@ export async function fetchOpenMeteoHistory(
       points.pop();
     }
 
-    if (window === '24h') points = points.slice(-24);
+    points = points.slice(-KEEP_POINTS[window]);
 
     return { slug, window, origin: 'model', points };
   } catch {

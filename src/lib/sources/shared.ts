@@ -14,6 +14,20 @@ export interface ProviderResult {
 /** Показания старше трёх часов считаем устаревшими и отбрасываем. */
 export const STALE_LIMIT_MS = 3 * 60 * 60 * 1000;
 
+/**
+ * Допуск на рассинхрон часов источника: метки времени дальше 15 минут
+ * в будущем считаем сбойными (классика — станция штампует локальное время
+ * как UTC и «уезжает» на +5 часов).
+ */
+export const FUTURE_SKEW_MS = 15 * 60 * 1000;
+
+/**
+ * Таймаут каждого запроса к внешнему API, мс. Без него зависший хост
+ * держит соединение до 300-секундных дефолтов undici, что блокирует
+ * статическую генерацию страниц и ISR-ревалидацию.
+ */
+export const FETCH_TIMEOUT_MS = 10_000;
+
 /** Кэш fetch для текущих значений (Next.js Data Cache), секунды. */
 export const REVALIDATE_CURRENT = 1800;
 
@@ -43,11 +57,14 @@ export function toIsoUtc(raw: string): string | null {
   return new Date(ms).toISOString();
 }
 
-/** Показание не старше STALE_LIMIT_MS относительно nowMs. */
+/**
+ * Показание не старше STALE_LIMIT_MS относительно nowMs и не дальше
+ * FUTURE_SKEW_MS в будущем (метки времени из будущего — сбой часов источника).
+ */
 export function isFresh(iso: string, nowMs: number): boolean {
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return false;
-  return nowMs - ms <= STALE_LIMIT_MS;
+  return ms - nowMs <= FUTURE_SKEW_MS && nowMs - ms <= STALE_LIMIT_MS;
 }
 
 /** Человекочитаемая (RU) причина сбоя для SourceStatus.detail. */

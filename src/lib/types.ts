@@ -84,7 +84,7 @@ export interface HourlyPoint {
   time: string;
   pm25: number | null;
   pm10: number | null;
-  /** AQI из pm25 (или pm10, если pm25 нет). */
+  /** AQI по худшему из загрязнителей (max), правило EPA. */
   aqi: number | null;
 }
 

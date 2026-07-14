@@ -17,6 +17,7 @@ import { districtForPoint } from '../districts';
 import type { DistrictSlug, SourceStatus, StationReading } from '../types';
 import {
   errorDetail,
+  FETCH_TIMEOUT_MS,
   isFresh,
   REVALIDATE_CURRENT,
   toIsoUtc,
@@ -73,13 +74,28 @@ function finiteOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * AQI-шкалированное значение WAQI с проверкой здравого диапазона [0, 500].
+ * Отрицательное — глюк/сентинел станции, отбрасываем (null); выше потолка
+ * шкалы — прижимаем к 500, как toAqi в src/lib/aqi.ts (AQI > 500 при
+ * экстремальном смоге реален, шкала просто упирается в максимум).
+ */
+function stationAqiOrNull(value: unknown): number | null {
+  const v = finiteOrNull(value);
+  if (v === null || v < 0) return null;
+  return Math.min(v, 500);
+}
+
 /** Свежий фид станции → StationReading; null, если данных нет или они устарели. */
 async function fetchFeedReading(
   candidate: Candidate,
   token: string,
   nowMs: number,
 ): Promise<StationReading | null> {
-  const init: NextFetchInit = { next: { revalidate: REVALIDATE_CURRENT } };
+  const init: NextFetchInit = {
+    next: { revalidate: REVALIDATE_CURRENT },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  };
   const res = await fetch(`${BASE}/feed/@${candidate.uid}/?token=${token}`, init);
   if (!res.ok) return null;
   const body = (await res.json()) as WaqiFeedResponse;
@@ -92,7 +108,7 @@ async function fetchFeedReading(
 
   const iaqi = data.iaqi ?? {};
   const stationAqi =
-    finiteOrNull(iaqi.pm25?.v) ?? finiteOrNull(iaqi.pm10?.v) ?? finiteOrNull(data.aqi);
+    stationAqiOrNull(iaqi.pm25?.v) ?? stationAqiOrNull(iaqi.pm10?.v) ?? stationAqiOrNull(data.aqi);
   if (stationAqi === null) return null;
 
   const geo = data.city?.geo;
@@ -126,7 +142,10 @@ export async function fetchWaqi(): Promise<ProviderResult> {
   if (!token) return failed(false, 'не настроен');
 
   try {
-    const init: NextFetchInit = { next: { revalidate: REVALIDATE_CURRENT } };
+    const init: NextFetchInit = {
+      next: { revalidate: REVALIDATE_CURRENT },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    };
     const res = await fetch(`${BASE}/v2/map/bounds?latlng=${BOUNDS}&networks=all&token=${token}`, init);
     if (!res.ok) return failed(true, `HTTP ${res.status}`);
 

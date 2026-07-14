@@ -95,6 +95,17 @@ describe('fetchOpenAq', () => {
     expect(init?.headers).toMatchObject({ 'X-API-Key': 'test-openaq-key' });
   });
 
+  it('каждый запрос уходит с таймаут-сигналом AbortSignal', async () => {
+    mockOpenAqApi();
+
+    await fetchOpenAq();
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1); // гео-запрос + точечные /latest
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
   it('устаревшие по datetimeLast и локации без координат не запрашиваются точечно', async () => {
     mockOpenAqApi();
 

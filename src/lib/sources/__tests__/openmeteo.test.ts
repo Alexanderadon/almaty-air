@@ -28,6 +28,23 @@ function cloneHistory(): MutableHistory {
   return JSON.parse(JSON.stringify(openMeteoHistory)) as MutableHistory;
 }
 
+/**
+ * Синтетическая почасовая история: `hours` точек с шагом в час от startIso.
+ * Метки времени — в формате Open-Meteo (`YYYY-MM-DDTHH:MM`, без зоны, UTC).
+ */
+function syntheticHistory(hours: number, startIso: string): MutableHistory {
+  const start = Date.parse(startIso);
+  const time: string[] = [];
+  const pm25: (number | null)[] = [];
+  const pm10: (number | null)[] = [];
+  for (let i = 0; i < hours; i++) {
+    time.push(new Date(start + i * 3_600_000).toISOString().slice(0, 16));
+    pm25.push(10);
+    pm10.push(20);
+  }
+  return { hourly: { time, pm2_5: pm25, pm10 } };
+}
+
 const fetchMock = vi.fn<FetchLike>();
 
 beforeEach(() => {
@@ -167,7 +184,7 @@ describe('fetchOpenMeteoHistory — окна и обрезка', () => {
     });
   });
 
-  it('AQI точки: из PM2.5, при его отсутствии — из PM10', async () => {
+  it('AQI точки: при отсутствии PM2.5 берётся PM10', async () => {
     const modified = cloneHistory();
     modified.hourly.pm2_5[20] = null;
     modified.hourly.pm10[20] = 30;
@@ -179,6 +196,41 @@ describe('fetchOpenMeteoHistory — окна и обрезка', () => {
     expect(history.points[20].pm25).toBeNull();
     expect(history.points[20].pm10).toBe(30);
     expect(history.points[20].aqi).toBe(pm10ToAqi(30));
+  });
+
+  it('AQI точки — худший из загрязнителей (правило EPA): пылевая буря с доминирующим PM10', async () => {
+    const modified = cloneHistory();
+    // Час пылевой бури: PM2.5 умеренный, PM10 экстремальный.
+    modified.hourly.pm2_5[20] = 30;
+    modified.hourly.pm10[20] = 350;
+    fetchMock.mockResolvedValue(jsonResponse(modified));
+    vi.setSystemTime(new Date('2026-07-15T00:30:00Z'));
+
+    const history = await fetchOpenMeteoHistory('almaly', '7d');
+
+    const pm25Aqi = pm25ToAqi(30);
+    const pm10Aqi = pm10ToAqi(350);
+    // Тест осмыслен, только если PM10 действительно доминирует.
+    expect(pm10Aqi).not.toBeNull();
+    expect(pm25Aqi).not.toBeNull();
+    expect(pm10Aqi as number).toBeGreaterThan(pm25Aqi as number);
+    expect(history.points[20].aqi).toBe(pm10Aqi);
+  });
+
+  it.each([
+    ['7d', 168],
+    ['30d', 720],
+  ] as const)('окно %s ужимается ровно до %i точек — лишние сутки не рисуются', async (window, keep) => {
+    // 800 часов от 2026-06-01T00:00Z — всё в прошлом относительно «сейчас».
+    fetchMock.mockResolvedValue(jsonResponse(syntheticHistory(800, '2026-06-01T00:00:00Z')));
+
+    const history = await fetchOpenMeteoHistory('almaly', window);
+
+    expect(history.points).toHaveLength(keep);
+    // Последняя точка — последний час данных (индекс 799), первая — ровно keep-1 часов раньше.
+    const lastMs = Date.parse('2026-06-01T00:00:00Z') + 799 * 3_600_000;
+    expect(history.points[keep - 1].time).toBe(new Date(lastMs).toISOString());
+    expect(history.points[0].time).toBe(new Date(lastMs - (keep - 1) * 3_600_000).toISOString());
   });
 
   it('HTTP 500 → пустой список точек, без исключения', async () => {
@@ -195,5 +247,25 @@ describe('fetchOpenMeteoHistory — окна и обрезка', () => {
     const history = await fetchOpenMeteoHistory('turksib', '30d');
 
     expect(history).toEqual({ slug: 'turksib', window: '30d', origin: 'model', points: [] });
+  });
+});
+
+describe('таймаут запросов', () => {
+  it('current и history уходят с таймаут-сигналом AbortSignal', async () => {
+    fetchMock.mockImplementation((input) =>
+      Promise.resolve(
+        String(input).includes('hourly=')
+          ? jsonResponse(openMeteoHistory)
+          : jsonResponse(openMeteoCurrent),
+      ),
+    );
+
+    await fetchOpenMeteoCurrent();
+    await fetchOpenMeteoHistory('almaly', '24h');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
   });
 });

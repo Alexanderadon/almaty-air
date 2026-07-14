@@ -18,6 +18,7 @@ import { districtForPoint } from '../districts';
 import type { DistrictSlug, SourceStatus, StationReading } from '../types';
 import {
   errorDetail,
+  FETCH_TIMEOUT_MS,
   isFresh,
   REVALIDATE_CURRENT,
   toIsoUtc,
@@ -98,6 +99,7 @@ async function fetchLatestReading(
   const init: NextFetchInit = {
     headers: { 'X-API-Key': apiKey },
     next: { revalidate: REVALIDATE_CURRENT },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   };
   const res = await fetch(`${BASE}/locations/${candidate.id}/latest?limit=100`, init);
   if (!res.ok) return null;
@@ -147,6 +149,7 @@ export async function fetchOpenAq(): Promise<ProviderResult> {
     const init: NextFetchInit = {
       headers: { 'X-API-Key': apiKey },
       next: { revalidate: REVALIDATE_CURRENT },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     };
     const res = await fetch(url, init);
     if (!res.ok) return failed(true, `HTTP ${res.status}`);

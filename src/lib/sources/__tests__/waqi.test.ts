@@ -92,6 +92,116 @@ describe('fetchWaqi', () => {
     expect(medeu?.measurements).toEqual([]);
   });
 
+  it('отрицательный iaqi.pm25 — глюк канала: отбрасывается, берётся pm10', async () => {
+    const bounds = {
+      status: 'ok',
+      data: [
+        {
+          lat: 43.2523,
+          lon: 76.9089,
+          uid: 300,
+          aqi: '41',
+          station: { name: 'Glitchy PM25', time: '2026-07-14T13:00:00+05:00' },
+        },
+      ],
+    };
+    const feeds: Record<number, object> = {
+      300: {
+        status: 'ok',
+        data: {
+          aqi: 41,
+          idx: 300,
+          city: { geo: [43.2523, 76.9089], name: 'Glitchy PM25' },
+          time: { iso: '2026-07-14T13:00:00+05:00' },
+          iaqi: { pm25: { v: -3 }, pm10: { v: 41 } },
+        },
+      },
+    };
+    mockWaqiApi(bounds, feeds);
+
+    const { stations } = await fetchWaqi();
+
+    expect(stations).toHaveLength(1);
+    expect(stations[0].stationAqi).toBe(41);
+  });
+
+  it('станция без единого канала в диапазоне [0, 500] отбрасывается целиком', async () => {
+    const bounds = {
+      status: 'ok',
+      data: [
+        {
+          lat: 43.2523,
+          lon: 76.9089,
+          uid: 301,
+          aqi: '-2',
+          station: { name: 'All negative', time: '2026-07-14T13:00:00+05:00' },
+        },
+      ],
+    };
+    const feeds: Record<number, object> = {
+      301: {
+        status: 'ok',
+        data: {
+          aqi: -2,
+          idx: 301,
+          city: { geo: [43.2523, 76.9089], name: 'All negative' },
+          time: { iso: '2026-07-14T13:00:00+05:00' },
+          iaqi: { pm25: { v: -3 }, pm10: { v: -1 } },
+        },
+      },
+    };
+    mockWaqiApi(bounds, feeds);
+
+    const { status, stations } = await fetchWaqi();
+
+    expect(stations).toEqual([]);
+    expect(status).toEqual({ id: 'waqi', configured: true, ok: true, stations: 0 });
+  });
+
+  it('iaqi.pm25 выше потолка шкалы прижимается к 500', async () => {
+    const bounds = {
+      status: 'ok',
+      data: [
+        {
+          lat: 43.2523,
+          lon: 76.9089,
+          uid: 302,
+          aqi: '500',
+          station: { name: 'Extreme smog', time: '2026-07-14T13:00:00+05:00' },
+        },
+      ],
+    };
+    const feeds: Record<number, object> = {
+      302: {
+        status: 'ok',
+        data: {
+          aqi: 500,
+          idx: 302,
+          city: { geo: [43.2523, 76.9089], name: 'Extreme smog' },
+          time: { iso: '2026-07-14T13:00:00+05:00' },
+          iaqi: { pm25: { v: 99999 } },
+        },
+      },
+    };
+    mockWaqiApi(bounds, feeds);
+
+    const { stations } = await fetchWaqi();
+
+    expect(stations).toHaveLength(1);
+    expect(stations[0].stationAqi).toBe(500);
+  });
+
+  it('каждый запрос уходит с таймаут-сигналом AbortSignal', async () => {
+    mockWaqiApi();
+
+    await fetchWaqi();
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1); // bounds + точечные /feed
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
   it('станции с aqi:"-" не запрашиваются точечно', async () => {
     mockWaqiApi();
 

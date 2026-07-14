@@ -73,14 +73,16 @@ describe('getCityAir — агрегация станций и модели', () 
     expect(city.modelOnly).toBe(false);
     expect(city.updatedAt).toBe('2026-07-14T09:00:00.000Z');
 
-    // Алмалы: OpenAQ 18.4 мкг/м³ → AQI 68; WAQI iaqi.pm25 → 62. median([68,62]) = 65.
+    // Алмалы: ярусная агрегация — есть концентрационная станция OpenAQ
+    // (18.4 мкг/м³ → AQI 68 по EPA-2024), поэтому чужой готовый stationAqi
+    // WAQI (62) в медиану НЕ входит: aqi 68, stationCount 1.
     const almaly = city.districts.find((d) => d.slug === 'almaly');
     expect(almaly).toEqual({
       slug: 'almaly',
-      aqi: 65,
+      aqi: 68,
       pm25: 18.4,
       dominant: 'pm25',
-      stationCount: 2,
+      stationCount: 1,
       dataOrigin: 'stations',
       observedAt: '2026-07-14T08:15:00.000Z',
     });
@@ -91,7 +93,8 @@ describe('getCityAir — агрегация станций и модели', () 
     expect(bostandyk?.stationCount).toBe(1);
     expect(bostandyk?.dataOrigin).toBe('stations');
 
-    // Медеу: только WAQI со stationAqi 55 — pm25 и dominant неизвестны.
+    // Медеу: концентрационных станций нет → ярус 2, WAQI stationAqi 55;
+    // pm25 и dominant неизвестны.
     const medeu = city.districts.find((d) => d.slug === 'medeu');
     expect(medeu).toEqual({
       slug: 'medeu',
@@ -116,12 +119,34 @@ describe('getCityAir — агрегация станций и модели', () 
     });
   });
 
+  it('ярусная агрегация: чужой stationAqi не смешивается с концентрационными станциями', async () => {
+    mockAllProviders();
+
+    const city = await getCityAir();
+
+    // В Алмалы есть и OpenAQ (AQI 68 из концентрации), и WAQI (stationAqi 62):
+    // при смешивании медиана была бы 65 — ярусная агрегация даёт ровно 68.
+    const almaly = city.districts.find((d) => d.slug === 'almaly');
+    expect(almaly?.aqi).toBe(68);
+    expect(almaly?.stationCount).toBe(1);
+
+    // Медеу без концентрационных станций берёт ярус 2 — WAQI stationAqi 55…
+    const medeu = city.districts.find((d) => d.slug === 'medeu');
+    expect(medeu?.aqi).toBe(55);
+    expect(medeu?.dataOrigin).toBe('stations');
+
+    // …а Ауэзов вовсе без станций — модельный ярус CAMS.
+    const auezov = city.districts.find((d) => d.slug === 'auezov');
+    expect(auezov?.dataOrigin).toBe('model');
+    expect(auezov?.stationCount).toBe(0);
+  });
+
   it('citywide — медианы по районам', async () => {
     mockAllProviders();
 
     const city = await getCityAir();
 
-    // AQI районов: [68, 65, 68, 57, 68, 55, 68, 68] → медиана 68.
+    // AQI районов: [68, 68, 68, 57, 68, 55, 68, 68] → медиана 68.
     expect(city.citywide.aqi).toBe(68);
     // PM2.5 районов: [18.2, 18.4, 18.2, 12.1, 18.2, —, 18.2, 18.2] → медиана 18.2.
     expect(city.citywide.pm25).toBe(18.2);

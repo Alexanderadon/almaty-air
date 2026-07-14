@@ -5,9 +5,14 @@
  * - Реальные станции — только OpenAQ и WAQI. Модельные точки Open-Meteo
  *   НЕ попадают в CityAir.stations и stationCount — модель честно живёт
  *   только в DistrictAir с dataOrigin:'model' (см. .planning/DECISIONS.md, D9).
- * - AQI станции для медианы: AQI из PM2.5-концентрации (OpenAQ) → из PM10 →
- *   stationAqi (WAQI, уже AQI-шкала).
- * - AQI района: медиана по станциям района (округляется до целого).
+ * - Медиана района ярусная, шкалы AQI не смешиваются:
+ *   ярус 1 — станции с истинными концентрациями (OpenAQ): AQI считается у нас
+ *   по EPA-2024 (PM2.5 → PM10); если такие станции в районе есть, медиана
+ *   строится ТОЛЬКО по ним;
+ *   ярус 2 — станции лишь с чужим готовым stationAqi (WAQI: своя методика
+ *   усреднения и, возможно, до-2024 ревизия шкалы) — используются, только
+ *   когда концентрационных станций в районе нет.
+ * - AQI района: медиана по станциям выбранного яруса (округляется до целого).
  *   Район без станций получает модельное значение CAMS для центроида:
  *   максимум из AQI(PM2.5) и AQI(PM10) — по конвенции EPA «худший загрязнитель».
  * - AQI города: медиана по AQI районов; PM2.5 города — медиана по районам.
@@ -47,13 +52,23 @@ function measurementOf(station: StationReading, pollutant: PollutantCode) {
   return station.measurements.find((m) => m.pollutant === pollutant);
 }
 
-/** AQI станции для медианы района: PM2.5 → PM10 → stationAqi. */
-function stationAqiValue(station: StationReading): number | null {
+/**
+ * AQI станции из истинных концентраций (ярус 1): PM2.5 → PM10.
+ * null — у станции нет ни одного концентрационного измерения с AQI
+ * (например, WAQI, где есть только чужой готовый stationAqi).
+ */
+function concentrationAqi(station: StationReading): number | null {
   const pm25Aqi = measurementOf(station, 'pm25')?.aqi;
   if (pm25Aqi != null) return pm25Aqi;
   const pm10Aqi = measurementOf(station, 'pm10')?.aqi;
   if (pm10Aqi != null) return pm10Aqi;
-  return station.stationAqi;
+  return null;
+}
+
+/** Станция и AQI, с которым она входит в медиану своего яруса. */
+interface RatedStation {
+  station: StationReading;
+  aqi: number;
 }
 
 /** Провайдер отверг промис (не должен случаться — провайдеры ловят всё сами). */
@@ -78,15 +93,26 @@ function buildDistrict(
 ): DistrictAir {
   const own = realStations.filter((s) => s.districtSlug === slug);
 
+  // Ярусы не смешиваем (см. шапку модуля): ярус 1 — истинные концентрации
+  // (AQI по EPA-2024 считаем сами), ярус 2 — только чужой готовый stationAqi
+  // (WAQI). Если в районе есть хоть одна станция яруса 1, медиана — ТОЛЬКО
+  // по ярусу 1; ярус 2 — фолбэк, модель CAMS — последний ярус.
+  const tier1: RatedStation[] = [];
+  const tier2: RatedStation[] = [];
+  for (const station of own) {
+    const concAqi = concentrationAqi(station);
+    if (concAqi !== null) tier1.push({ station, aqi: concAqi });
+    else if (station.stationAqi !== null) tier2.push({ station, aqi: station.stationAqi });
+  }
+  const used = tier1.length > 0 ? tier1 : tier2;
+
   const aqiValues: number[] = [];
   const pm25Values: number[] = [];
   const pm25Aqis: number[] = [];
   const pm10Aqis: number[] = [];
   let latestObservedAt: string | null = null;
 
-  for (const station of own) {
-    const aqi = stationAqiValue(station);
-    if (aqi === null) continue;
+  for (const { station, aqi } of used) {
     aqiValues.push(aqi);
 
     const pm25 = measurementOf(station, 'pm25');
