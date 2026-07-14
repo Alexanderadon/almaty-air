@@ -34,6 +34,8 @@ import type {
   SourceId,
   StationReading,
 } from '@/lib/types';
+import DistrictAqiBadges from './DistrictAqiBadges';
+import LocateControl from './LocateControl';
 
 export interface AirMapProps {
   districts: DistrictAir[];
@@ -207,7 +209,9 @@ export default function AirMap({ districts, stations }: AirMapProps) {
             data={feature as unknown as GeoJSONProps['data']}
             style={{
               fillColor: fillColorFor(air?.aqi ?? null),
-              fillOpacity: 0.35,
+              /* 0.28 (было 0.35): сквозь заливку читаются тайлы,
+                 а пилюли AQI не сливаются с фоном района. */
+              fillOpacity: 0.28,
               color: OUTLINE_COLOR,
               opacity: 0.7,
               weight: 1,
@@ -222,6 +226,13 @@ export default function AirMap({ districts, stations }: AirMapProps) {
           </GeoJSON>
         );
       })}
+
+      {/* Пилюли AQI — иконные маркеры (markerPane), рисуются поверх полигонов
+          и станций. Станции ниже — CircleMarker в overlayPane; они добавляются
+          после полигонов, поэтому в SVG остаются над заливкой районов. */}
+      <DistrictAqiBadges districts={districts} />
+
+      <LocateControl districts={districts} />
 
       {stations.map((station) => {
         const position: [number, number] = [station.lat, station.lon];
