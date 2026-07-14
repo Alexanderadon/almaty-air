@@ -88,6 +88,12 @@ export interface HourlyPoint {
   aqi: number | null;
 }
 
+export interface DistrictForecast {
+  slug: DistrictSlug;
+  /** Почасовой прогноз модели CAMS (всегда origin model — честно маркировать в UI). */
+  points: HourlyPoint[];
+}
+
 export interface DistrictHistory {
   slug: DistrictSlug;
   window: HistoryWindow;

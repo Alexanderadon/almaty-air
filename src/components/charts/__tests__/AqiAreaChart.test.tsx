@@ -100,6 +100,90 @@ describe('AqiAreaChart — текстовая альтернатива', () => {
     ).toBeTruthy();
     expect(container.querySelector('table')).toBeNull();
   });
+
+  it('caption таблицы скрыт (sr-only): не всплывает поверх подписи под графиком', () => {
+    // Регрессия: sr-only на <table> не прячет <caption> (он живёт в table
+    // wrapper box вне table box) — подпись «Худший час…» накладывалась
+    // на «График по модели CAMS» под графиком 7/30 дней.
+    const { container } = render(
+      <AqiAreaChart series={hourlySeries([50, 60, 70])} window="30d" />,
+    );
+    const caption = container.querySelector('caption');
+    expect(caption).not.toBeNull();
+    expect(caption?.getAttribute('class') ?? '').toContain('sr-only');
+  });
+});
+
+describe('AqiAreaChart — оформление зон категорий', () => {
+  it('рисует направляющие на внутренних границах категорий', () => {
+    // Максимум 90 → верх шкалы 100, внутренняя граница одна (AQI 50).
+    const { container } = render(
+      <AqiAreaChart series={hourlySeries([50, 60, 90, 80])} window="24h" />,
+    );
+    expect(container.querySelectorAll('line.category-gridline')).toHaveLength(1);
+  });
+});
+
+describe('AqiAreaChart — режим прогноза', () => {
+  /** 48 часов с местной полуночи: 2026-07-13T19:00Z = 00:00 14 июля Asia/Almaty. */
+  function forecastSeries(): ReturnType<typeof hourlySeries> {
+    const aqis = Array.from({ length: 48 }, (_, i) => 40 + (i % 7));
+    return hourlySeries(aqis, '2026-07-13T19:00:00.000Z');
+  }
+
+  it('история: aria-label не меняется (контракт e2e)', () => {
+    const { container } = render(
+      <AqiAreaChart series={hourlySeries([50, 60, 70])} window="24h" />,
+    );
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe(
+      'График изменения AQI за 24 часа',
+    );
+  });
+
+  it('прогноз: aria-label «Прогноз AQI на 48 часов»', () => {
+    const { container } = render(
+      <AqiAreaChart series={forecastSeries()} window="24h" variant="forecast" />,
+    );
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toBe(
+      'Прогноз AQI на 48 часов',
+    );
+  });
+
+  it('линия прогноза пунктирная, у истории — сплошная', () => {
+    const forecast = render(
+      <AqiAreaChart series={forecastSeries()} window="24h" variant="forecast" />,
+    ).container;
+    expect(forecast.querySelector('path[stroke-dasharray]')).not.toBeNull();
+
+    const history = render(
+      <AqiAreaChart series={hourlySeries([50, 60, 70])} window="24h" />,
+    ).container;
+    expect(history.querySelector('path[stroke-dasharray]')).toBeNull();
+  });
+
+  it('тики прогноза: «HH:mm» и метка дня на местной полуночи (Asia/Almaty)', () => {
+    const { container } = render(
+      <AqiAreaChart series={forecastSeries()} window="24h" variant="forecast" />,
+    );
+    const svgText = container.querySelector('svg')?.textContent ?? '';
+    const dayLabel = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Asia/Almaty',
+      day: 'numeric',
+      month: 'short',
+    }).format(Date.parse('2026-07-13T19:00:00.000Z'));
+    expect(svgText).toContain(dayLabel); // полночь → «14 июл.»
+    expect(svgText).toContain('06:00'); // остальные тики — время
+  });
+
+  it('таблица прогноза не прореживается: строка на каждый час', () => {
+    const { container } = render(
+      <AqiAreaChart series={forecastSeries()} window="24h" variant="forecast" />,
+    );
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(48);
+    expect(container.querySelector('caption')?.textContent).toBe(
+      'Прогноз AQI по часам на 48 часов',
+    );
+  });
 });
 
 describe('AqiAreaChart — клавиатурная навигация', () => {

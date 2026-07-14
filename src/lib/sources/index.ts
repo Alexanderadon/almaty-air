@@ -39,7 +39,11 @@ import { fetchWaqi } from './waqi';
 import type { ProviderResult } from './shared';
 
 export { fetchOpenAq } from './openaq';
-export { fetchOpenMeteoCurrent, fetchOpenMeteoHistory } from './openmeteo';
+export {
+  fetchOpenMeteoCurrent,
+  fetchOpenMeteoHistory,
+  getDistrictForecast,
+} from './openmeteo';
 export { fetchWaqi } from './waqi';
 export type { ProviderResult } from './shared';
 

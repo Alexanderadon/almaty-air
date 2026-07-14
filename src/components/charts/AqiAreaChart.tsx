@@ -31,7 +31,15 @@ import { dailyWorstPoints, summarizeAqi } from './summary';
 export interface AqiAreaChartProps {
   series: HourlyPoint[];
   window: HistoryWindow;
+  /**
+   * forecast — прогнозная серия: пунктирная линия, тики «HH:mm» с метками
+   * дней на местной полуночи, aria-label «Прогноз AQI на 48 часов».
+   * По умолчанию history — поведение исторического графика не меняется.
+   */
+  variant?: 'history' | 'forecast';
 }
+
+export type AqiChartVariant = NonNullable<AqiAreaChartProps['variant']>;
 
 /** Точка серии с предвычисленной датой (парсим ISO один раз). */
 interface ChartPoint extends HourlyPoint {
@@ -77,13 +85,42 @@ const CONCENTRATION_FMT = new Intl.NumberFormat('ru-RU', {
   maximumFractionDigits: 1,
 });
 
+/** Час точки в местном времени (метки дней на тиках прогноза). h23 — чтобы полночь была «00», а не «24». */
+const LOCAL_HOUR_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: DISPLAY_TZ,
+  hour: '2-digit',
+  hourCycle: 'h23',
+});
+
+function localHour(date: Date): number {
+  return Number(LOCAL_HOUR_FMT.format(date));
+}
+
 /**
  * Цвет категории, подмешанный к цвету текста темы: светлые категории
  * («Хорошо» #F5F0BB) в чистом виде неразличимы на светлом фоне,
  * подмес --foreground даёт видимую линию в обеих темах.
+ * На тёмной теме доля --foreground выше (38% против 28%): тёмным категориям
+ * («Опасно» #4A1D4F) 28% светлого подмеса не хватает на тёмной поверхности.
+ * light-dark() работает благодаря color-scheme: light dark на :root.
  */
 function contrastCategoryColor(aqi: number): string {
-  return `color-mix(in srgb, ${aqiCategory(aqi).color} 72%, var(--foreground) 28%)`;
+  const base = aqiCategory(aqi).color;
+  return (
+    `light-dark(color-mix(in srgb, ${base} 72%, var(--foreground) 28%), ` +
+    `color-mix(in srgb, ${base} 62%, var(--foreground) 38%))`
+  );
+}
+
+/**
+ * Заливка фоновой зоны категории. На светлой теме 8% цвета достаточно,
+ * на тёмной те же 8% сливаются в неразличимую тёмную кашу — берём 13%.
+ */
+function bandFill(color: string): string {
+  return (
+    `light-dark(color-mix(in srgb, ${color} 8%, transparent), ` +
+    `color-mix(in srgb, ${color} 13%, transparent))`
+  );
 }
 
 /** Ближайшая по времени точка (бинарный поиск по отсортированному массиву). */
@@ -103,8 +140,8 @@ function nearestPoint(points: ChartPoint[], ms: number): ChartPoint | null {
 }
 
 /** Текст точки для aria-live: время, AQI и категория (или «нет данных»). */
-function describePoint(point: ChartPoint, win: HistoryWindow): string {
-  const time = (win === '24h' ? HOUR_FMT : TOOLTIP_FULL_FMT).format(point.date);
+function describePoint(point: ChartPoint, fmt: Intl.DateTimeFormat): string {
+  const time = fmt.format(point.date);
   if (point.aqi === null) return `${time}: нет данных`;
   return `${time}: AQI ${point.aqi} — ${aqiCategory(point.aqi).shortRu}`;
 }
@@ -125,13 +162,14 @@ const TOOLTIP_STYLES: React.CSSProperties = {
 interface ChartInnerProps {
   points: ChartPoint[];
   win: HistoryWindow;
+  variant: AqiChartVariant;
   width: number;
   height: number;
   /** id sr-only сводки — связывается с SVG через aria-describedby. */
   describedBy?: string;
 }
 
-function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps) {
+function ChartInner({ points, win, variant, width, height, describedBy }: ChartInnerProps) {
   const rawId = useId();
   // useId может содержать «:» — недопустимо в url(#…)-ссылках SVG.
   const gradientId = `aqi-area-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -167,6 +205,10 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
     };
   }, [points, innerWidth, innerHeight]);
 
+  const isForecast = variant === 'forecast';
+  /** Формат времени точки (aria-live и тултип): прогноз и 7/30д — с датой. */
+  const pointTimeFmt = !isForecast && win === '24h' ? HOUR_FMT : TOOLTIP_FULL_FMT;
+
   /** Фоновые зоны категорий — только до видимого максимума шкалы. */
   const bands = useMemo(() => {
     const result: { key: string; y: number; height: number; color: string }[] = [];
@@ -184,6 +226,9 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
     }
     return result;
   }, [yScale, yMax]);
+
+  /** Внутренние границы категорий (без верха шкалы) — тонкие направляющие. */
+  const boundaries = useMemo(() => CATEGORY_TOPS.filter((b) => b < yMax), [yMax]);
 
   const yTickValues = useMemo(
     () => [0, ...CATEGORY_TOPS.filter((b) => b <= yMax)],
@@ -303,10 +348,24 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
   const formatXTick = useCallback(
     (value: Date | { valueOf(): number }): string => {
       const date = value instanceof Date ? value : new Date(value.valueOf());
+      if (isForecast) {
+        // Местная полночь — метка дня («15 июл.»), остальные тики — «HH:mm».
+        return localHour(date) === 0 ? DAY_FMT.format(date) : HOUR_FMT.format(date);
+      }
       return (win === '24h' ? HOUR_FMT : DAY_FMT).format(date);
     },
-    [win],
+    [win, isForecast],
   );
+
+  /**
+   * Тики прогноза — каждые 6 часов по местному времени (на узких экранах —
+   * каждые 12): полуночи попадают в сетку и получают метку дня.
+   */
+  const forecastTickValues = useMemo(() => {
+    if (!isForecast) return undefined;
+    const step = width < 480 ? 12 : 6;
+    return points.filter((p) => localHour(p.date) % step === 0).map((p) => p.date);
+  }, [isForecast, points, width]);
 
   const numTicksX = win === '7d' ? (width < 480 ? 4 : 7) : width < 480 ? 4 : 6;
 
@@ -314,8 +373,12 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
 
   const announcement =
     focusIdx !== null && focusIdx < points.length
-      ? describePoint(points[focusIdx], win)
+      ? describePoint(points[focusIdx], pointTimeFmt)
       : '';
+
+  const chartTitle = isForecast
+    ? 'Прогноз AQI на 48 часов'
+    : `График изменения AQI ${WINDOW_LABEL[win]}`;
 
   return (
     <div
@@ -324,7 +387,7 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
       role="application"
       aria-roledescription="интерактивный график"
       aria-label={
-        `График AQI ${WINDOW_LABEL[win]}. ` +
+        `${isForecast ? 'Прогноз AQI на 48 часов' : `График AQI ${WINDOW_LABEL[win]}`}. ` +
         'Стрелки влево и вправо — по точкам, PageUp и PageDown — на сутки, ' +
         'Home и End — к краям, Escape — скрыть значение.'
       }
@@ -335,15 +398,15 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
         width={width}
         height={height}
         role="img"
-        aria-label={`График изменения AQI ${WINDOW_LABEL[win]}`}
+        aria-label={chartTitle}
         aria-describedby={describedBy}
       >
         <LinearGradient
           id={gradientId}
           from={gradientColor}
           to={gradientColor}
-          fromOpacity={0.35}
-          toOpacity={0.02}
+          fromOpacity={0.45}
+          toOpacity={0.03}
         />
         <Group left={MARGIN.left} top={MARGIN.top}>
           {bands.map((band) => (
@@ -353,8 +416,22 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
               y={band.y}
               width={innerWidth}
               height={band.height}
-              fill={band.color}
-              fillOpacity={0.08}
+              fill={bandFill(band.color)}
+            />
+          ))}
+
+          {/* Тонкие направляющие на границах категорий — читаются на обеих темах. */}
+          {boundaries.map((b) => (
+            <line
+              key={b}
+              className="category-gridline"
+              x1={0}
+              x2={innerWidth}
+              y1={yScale(b)}
+              y2={yScale(b)}
+              stroke="color-mix(in srgb, var(--border) 50%, transparent)"
+              strokeWidth={1}
+              shapeRendering="crispEdges"
             />
           ))}
 
@@ -375,6 +452,7 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
             curve={curveMonotoneX}
             stroke={strokeColor}
             strokeWidth={2}
+            strokeDasharray={isForecast ? '6,4' : undefined}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -383,6 +461,7 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
             top={innerHeight}
             scale={xScale}
             numTicks={numTicksX}
+            tickValues={forecastTickValues}
             tickFormat={formatXTick}
             stroke="var(--border)"
             tickStroke="var(--border)"
@@ -455,7 +534,7 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
           style={TOOLTIP_STYLES}
         >
           <p className="font-semibold tabular-nums">
-            {(win === '24h' ? HOUR_FMT : TOOLTIP_FULL_FMT).format(tooltipData.date)}
+            {pointTimeFmt.format(tooltipData.date)}
           </p>
           <p className="tabular-nums">
             AQI:{' '}
@@ -480,13 +559,26 @@ function ChartInner({ points, win, width, height, describedBy }: ChartInnerProps
 }
 
 /** Скрытая визуально таблица значений — текстовая альтернатива графика. */
-function SrOnlyTable({ rows, win }: { rows: ChartPoint[]; win: HistoryWindow }) {
+function SrOnlyTable({
+  rows,
+  win,
+  variant,
+}: {
+  rows: ChartPoint[];
+  win: HistoryWindow;
+  variant: AqiChartVariant;
+}) {
   return (
     <table className="sr-only">
-      <caption>
-        {win === '24h'
-          ? 'Значения AQI по часам за 24 часа'
-          : `Худший час каждого дня ${WINDOW_LABEL[win]}`}
+      {/* sr-only на самой таблице caption не прячет: overflow/clip применяются
+          к table box, а caption живёт в table wrapper box снаружи — без
+          собственного sr-only подпись всплывала поверх подписи под графиком. */}
+      <caption className="sr-only">
+        {variant === 'forecast'
+          ? 'Прогноз AQI по часам на 48 часов'
+          : win === '24h'
+            ? 'Значения AQI по часам за 24 часа'
+            : `Худший час каждого дня ${WINDOW_LABEL[win]}`}
       </caption>
       <thead>
         <tr>
@@ -516,7 +608,11 @@ function SrOnlyTable({ rows, win }: { rows: ChartPoint[]; win: HistoryWindow }) 
  * Переиспользуемый график AQI по часовым точкам.
  * Меньше двух точек со значением — честная заглушка «Недостаточно данных».
  */
-export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
+export function AqiAreaChart({
+  series,
+  window: win,
+  variant = 'history',
+}: AqiAreaChartProps) {
   const summaryId = useId();
 
   const points = useMemo<ChartPoint[]>(
@@ -538,10 +634,13 @@ export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
 
   const summary = useMemo(() => summarizeAqi(points), [points]);
 
-  /** Строки текстовой таблицы: 24ч — все часы, 7/30д — худший час каждого дня. */
+  /** Строки текстовой таблицы: 24ч и прогноз — все часы, 7/30д — худший час каждого дня. */
   const tableRows = useMemo(
-    () => (win === '24h' ? points : dailyWorstPoints(points, DISPLAY_TZ)),
-    [points, win],
+    () =>
+      variant === 'forecast' || win === '24h'
+        ? points
+        : dailyWorstPoints(points, DISPLAY_TZ),
+    [points, win, variant],
   );
 
   if (definedCount < 2 || summary === null) {
@@ -568,6 +667,7 @@ export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
                 key={win}
                 points={points}
                 win={win}
+                variant={variant}
                 width={width}
                 height={Math.max(height, 260)}
                 describedBy={summaryId}
@@ -579,12 +679,13 @@ export function AqiAreaChart({ series, window: win }: AqiAreaChartProps) {
 
       {/* Текстовая альтернатива для скринридеров: сводка + таблица значений. */}
       <p id={summaryId} className="sr-only">
-        {`AQI ${WINDOW_LABEL[win]}: минимум ${summary.minAqi} (${TOOLTIP_FULL_FMT.format(summary.min.ms)}), ` +
+        {`${variant === 'forecast' ? 'Прогноз AQI на 48 часов' : `AQI ${WINDOW_LABEL[win]}`}: ` +
+          `минимум ${summary.minAqi} (${TOOLTIP_FULL_FMT.format(summary.min.ms)}), ` +
           `максимум ${summary.maxAqi} (${TOOLTIP_FULL_FMT.format(summary.max.ms)}), ` +
           `последнее значение ${summary.lastAqi} — ${aqiCategory(summary.lastAqi).labelRu.toLowerCase()} ` +
           `(${TOOLTIP_FULL_FMT.format(summary.last.ms)}).`}
       </p>
-      <SrOnlyTable rows={tableRows} win={win} />
+      <SrOnlyTable rows={tableRows} win={win} variant={variant} />
     </>
   );
 }

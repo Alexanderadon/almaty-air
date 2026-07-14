@@ -11,6 +11,7 @@
 import { pm10ToAqi, pm25ToAqi } from '../aqi';
 import { DISTRICTS } from '../districts';
 import type {
+  DistrictForecast,
   DistrictHistory,
   DistrictSlug,
   HistoryWindow,
@@ -36,6 +37,11 @@ const PAST_DAYS: Record<HistoryWindow, number> = { '24h': 2, '7d': 7, '30d': 30 
 
 /** Точное число часовых точек в окне — ровно столько, сколько обещает подпись. */
 const KEEP_POINTS: Record<HistoryWindow, number> = { '24h': 24, '7d': 7 * 24, '30d': 30 * 24 };
+
+/** Длина прогноза, часов: от начала текущего часа на двое суток вперёд. */
+const FORECAST_POINTS = 48;
+
+const HOUR_MS = 3_600_000;
 
 interface OpenMeteoCurrentBlock {
   time?: string;
@@ -64,6 +70,15 @@ interface OpenMeteoHistoryResponse {
 function sanitizeConcentration(value: number | null | undefined): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
   return value;
+}
+
+/** AQI часовой точки — максимум из AQI(PM2.5) и AQI(PM10), правило EPA «худший загрязнитель». */
+function pointAqi(pm25: number | null, pm10: number | null): number | null {
+  const pm25Aqi = pm25 !== null ? pm25ToAqi(pm25) : null;
+  const pm10Aqi = pm10 !== null ? pm10ToAqi(pm10) : null;
+  return pm25Aqi !== null && pm10Aqi !== null
+    ? Math.max(pm25Aqi, pm10Aqi)
+    : (pm25Aqi ?? pm10Aqi);
 }
 
 function buildMeasurements(block: OpenMeteoCurrentBlock): Measurement[] {
@@ -180,11 +195,7 @@ export async function fetchOpenMeteoHistory(
       const pm25 = sanitizeConcentration(pm25s[i]);
       const pm10 = sanitizeConcentration(pm10s[i]);
       // Худший из загрязнителей (правило EPA) — как в текущих значениях района.
-      const pm25Aqi = pm25 !== null ? pm25ToAqi(pm25) : null;
-      const pm10Aqi = pm10 !== null ? pm10ToAqi(pm10) : null;
-      const aqi =
-        pm25Aqi !== null && pm10Aqi !== null ? Math.max(pm25Aqi, pm10Aqi) : (pm25Aqi ?? pm10Aqi);
-      points.push({ time, pm25, pm10, aqi });
+      points.push({ time, pm25, pm10, aqi: pointAqi(pm25, pm10) });
     }
 
     while (points.length > 0) {
@@ -196,6 +207,55 @@ export async function fetchOpenMeteoHistory(
     points = points.slice(-KEEP_POINTS[window]);
 
     return { slug, window, origin: 'model', points };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Почасовой модельный прогноз для центроида района: от начала текущего часа
+ * до FORECAST_POINTS (48) точек вперёд. forecast_days=3 покрывает окно при
+ * любом времени суток (72 часа от полуночи UTC ⊇ 48 часов от текущего часа).
+ * AQI точки — правило EPA «худший загрязнитель», как в истории. Часы без
+ * данных остаются точками с aqi:null (разрыв честно виден на графике).
+ * При любом сбое — пустой список точек, исключений не бросает.
+ */
+export async function getDistrictForecast(slug: DistrictSlug): Promise<DistrictForecast> {
+  const empty: DistrictForecast = { slug, points: [] };
+  const district = DISTRICTS.find((d) => d.slug === slug);
+  if (!district) return empty; // недостижимо при корректном DistrictSlug — защитная ветка
+
+  try {
+    const [lat, lon] = district.centroid;
+    const url =
+      `${AIR_QUALITY_API}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+      '&hourly=pm2_5,pm10&past_days=0&forecast_days=3&timezone=UTC';
+    const init: NextFetchInit = {
+      // Прогноз кэшируется как история: модель CAMS обновляется не чаще часа.
+      next: { revalidate: REVALIDATE_HISTORY },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    };
+    const res = await fetch(url, init);
+    if (!res.ok) return empty;
+
+    const payload = (await res.json()) as OpenMeteoHistoryResponse;
+    const times = payload.hourly?.time ?? [];
+    const pm25s = payload.hourly?.pm2_5 ?? [];
+    const pm10s = payload.hourly?.pm10 ?? [];
+    // Начало текущего часа: точка текущего часа — первая точка прогноза.
+    const startMs = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+
+    const points: HourlyPoint[] = [];
+    for (let i = 0; i < times.length && points.length < FORECAST_POINTS; i++) {
+      const time = toIsoUtc(times[i]);
+      if (time === null) continue;
+      if (Date.parse(time) < startMs) continue;
+      const pm25 = sanitizeConcentration(pm25s[i]);
+      const pm10 = sanitizeConcentration(pm10s[i]);
+      points.push({ time, pm25, pm10, aqi: pointAqi(pm25, pm10) });
+    }
+
+    return { slug, points };
   } catch {
     return empty;
   }

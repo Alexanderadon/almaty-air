@@ -13,7 +13,7 @@ import { pm10ToAqi, pm25ToAqi } from '../../aqi';
 import { DISTRICTS } from '../../districts';
 import openMeteoCurrent from '../__fixtures__/openmeteo-current.json';
 import openMeteoHistory from '../__fixtures__/openmeteo-history.json';
-import { fetchOpenMeteoCurrent, fetchOpenMeteoHistory } from '../openmeteo';
+import { fetchOpenMeteoCurrent, fetchOpenMeteoHistory, getDistrictForecast } from '../openmeteo';
 import { calledUrls, jsonResponse, type FetchLike } from './helpers';
 
 interface MutableHistory {
@@ -250,8 +250,119 @@ describe('fetchOpenMeteoHistory — окна и обрезка', () => {
   });
 });
 
+describe('getDistrictForecast — прогноз на 48 часов', () => {
+  /** Полный ответ forecast_days=3: 72 часа от полуночи UTC текущих суток. */
+  function forecastPayload(): MutableHistory {
+    return syntheticHistory(72, '2026-07-14T00:00:00Z');
+  }
+
+  it('срез от начала текущего часа: ровно 48 точек, худший загрязнитель', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(forecastPayload()));
+
+    const forecast = await getDistrictForecast('almaly');
+
+    expect(forecast.slug).toBe('almaly');
+    expect(forecast.points).toHaveLength(48);
+    // «Сейчас» 09:00Z → первая точка — текущий час, последняя — +47 часов.
+    expect(forecast.points[0].time).toBe('2026-07-14T09:00:00.000Z');
+    expect(forecast.points[47].time).toBe('2026-07-16T08:00:00.000Z');
+    // Синтетика: pm2_5=10 (AQI 52) доминирует над pm10=20 (AQI 19).
+    expect(forecast.points[0]).toEqual({
+      time: '2026-07-14T09:00:00.000Z',
+      pm25: 10,
+      pm10: 20,
+      aqi: pm25ToAqi(10),
+    });
+  });
+
+  it('минуты не сдвигают срез: в 09:59 прогноз всё ещё начинается с 09:00', async () => {
+    vi.setSystemTime(new Date('2026-07-14T09:59:59Z'));
+    fetchMock.mockResolvedValue(jsonResponse(forecastPayload()));
+
+    const forecast = await getDistrictForecast('almaly');
+
+    expect(forecast.points[0].time).toBe('2026-07-14T09:00:00.000Z');
+    expect(forecast.points).toHaveLength(48);
+  });
+
+  it('запрашивает центроид района: hourly, past_days=0, forecast_days=3, timezone=UTC', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(forecastPayload()));
+
+    await getDistrictForecast('almaly');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = calledUrls(fetchMock)[0];
+    expect(url).toContain('hourly=pm2_5,pm10');
+    expect(url).toContain('past_days=0');
+    expect(url).toContain('forecast_days=3');
+    expect(url).toContain('timezone=UTC');
+    const almaly = DISTRICTS.find((d) => d.slug === 'almaly');
+    expect(url).toContain(`latitude=${almaly?.centroid[0].toFixed(4)}`);
+    expect(url).toContain(`longitude=${almaly?.centroid[1].toFixed(4)}`);
+  });
+
+  it('AQI точки — худший из загрязнителей: пылевая буря с доминирующим PM10', async () => {
+    const payload = forecastPayload();
+    // Час 20:00Z — 12-я точка среза (индекс 11): PM2.5 умеренный, PM10 экстремальный.
+    payload.hourly.pm2_5[20] = 30;
+    payload.hourly.pm10[20] = 350;
+    fetchMock.mockResolvedValue(jsonResponse(payload));
+
+    const forecast = await getDistrictForecast('almaly');
+
+    const pm25Aqi = pm25ToAqi(30);
+    const pm10Aqi = pm10ToAqi(350);
+    expect(pm10Aqi as number).toBeGreaterThan(pm25Aqi as number);
+    expect(forecast.points[11].time).toBe('2026-07-14T20:00:00.000Z');
+    expect(forecast.points[11].aqi).toBe(pm10Aqi);
+  });
+
+  it('час без данных остаётся точкой с aqi:null — разрыв честно виден', async () => {
+    const payload = forecastPayload();
+    payload.hourly.pm2_5[15] = null;
+    payload.hourly.pm10[15] = null;
+    fetchMock.mockResolvedValue(jsonResponse(payload));
+
+    const forecast = await getDistrictForecast('almaly');
+
+    expect(forecast.points).toHaveLength(48);
+    expect(forecast.points[6]).toEqual({
+      time: '2026-07-14T15:00:00.000Z',
+      pm25: null,
+      pm10: null,
+      aqi: null,
+    });
+  });
+
+  it('данных меньше 48 часов — отдаёт сколько есть, без добивки', async () => {
+    // Ответ обрывается на 19:00Z → от 09:00 доступно только 11 часов.
+    fetchMock.mockResolvedValue(jsonResponse(syntheticHistory(20, '2026-07-14T00:00:00Z')));
+
+    const forecast = await getDistrictForecast('almaly');
+
+    expect(forecast.points).toHaveLength(11);
+    expect(forecast.points[10].time).toBe('2026-07-14T19:00:00.000Z');
+  });
+
+  it('HTTP 500 → пустой список точек, без исключения', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: true }, 500));
+
+    const forecast = await getDistrictForecast('medeu');
+
+    expect(forecast).toEqual({ slug: 'medeu', points: [] });
+  });
+
+  it('сетевой сбой → пустой список точек, без исключения', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+
+    const forecast = await getDistrictForecast('turksib');
+
+    expect(forecast).toEqual({ slug: 'turksib', points: [] });
+  });
+});
+
 describe('таймаут запросов', () => {
-  it('current и history уходят с таймаут-сигналом AbortSignal', async () => {
+  it('current, history и forecast уходят с таймаут-сигналом AbortSignal', async () => {
     fetchMock.mockImplementation((input) =>
       Promise.resolve(
         String(input).includes('hourly=')
@@ -262,8 +373,9 @@ describe('таймаут запросов', () => {
 
     await fetchOpenMeteoCurrent();
     await fetchOpenMeteoHistory('almaly', '24h');
+    await getDistrictForecast('almaly');
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     for (const [, init] of fetchMock.mock.calls) {
       expect(init?.signal).toBeInstanceOf(AbortSignal);
     }

@@ -16,7 +16,8 @@ import {
 } from '../__fixtures__/openaq.fixture';
 import openMeteoCurrent from '../__fixtures__/openmeteo-current.json';
 import { waqiBoundsResponse, waqiFeedByUid } from '../__fixtures__/waqi.fixture';
-import { getCityAir } from '../index';
+import { getCityAir, getDistrictForecast } from '../index';
+import { getDistrictForecast as getDistrictForecastDirect } from '../openmeteo';
 import { jsonResponse, type FetchLike } from './helpers';
 
 const fetchMock = vi.fn<FetchLike>();
@@ -234,5 +235,11 @@ describe('getCityAir — агрегация станций и модели', () 
     expect(city.stations).toEqual([]);
     expect(city.modelOnly).toBe(true);
     expect(city.sources.every((s) => !s.ok)).toBe(true);
+  });
+});
+
+describe('экспорт прогноза из слоя источников', () => {
+  it('getDistrictForecast реэкспортируется из openmeteo без обёрток', () => {
+    expect(getDistrictForecast).toBe(getDistrictForecastDirect);
   });
 });

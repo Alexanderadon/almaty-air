@@ -100,7 +100,10 @@ export function ChartTabs({ histories, className = '' }: ChartTabsProps) {
       >
         <AqiAreaChart series={current.points} window={active} />
         {current.origin === 'model' && (
-          <p className="mt-2 inline-flex items-start gap-1.5 text-xs text-muted">
+          /* Единственная видимая подпись под графиком: для 7/30 дней происхождение
+             данных и конвенция сводки «худший час каждого дня» — одной строкой,
+             чтобы подписи не накладывались друг на друга. */
+          <p className="mt-2 flex items-start gap-1.5 text-xs text-muted">
             <svg
               viewBox="0 0 16 16"
               className="mt-0.5 h-3.5 w-3.5 shrink-0"
@@ -112,7 +115,11 @@ export function ChartTabs({ histories, className = '' }: ChartTabsProps) {
               <rect x="2" y="2" width="12" height="12" rx="1.5" />
               <path d="M8 2v12M2 8h12" />
             </svg>
-            <span>График по модели CAMS</span>
+            <span>
+              {active === '24h'
+                ? 'График по модели CAMS'
+                : 'График по модели CAMS · худший час каждого дня'}
+            </span>
           </p>
         )}
       </div>
