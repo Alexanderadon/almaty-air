@@ -6,64 +6,84 @@ export interface SourcesStatusProps {
   className?: string;
 }
 
-const SOURCE_META: Record<SourceId, { name: string; note: string }> = {
-  openaq: { name: 'OpenAQ', note: 'сеть сенсоров AirGradient' },
-  waqi: { name: 'WAQI', note: 'Казгидромет и посольство США' },
-  openmeteo: { name: 'Open-Meteo', note: 'модель CAMS (Copernicus)' },
-};
-
 type Tone = 'ok' | 'error' | 'off';
+
+interface SourceMeta {
+  /** Название источника словами жителя — подлежащее строки статуса. */
+  name: string;
+  /** Пояснение, что стоит за источником. */
+  note: string;
+  /** Формы статуса, согласованные с name по числу и роду. */
+  status: Record<Tone, string>;
+  /** Единица счёта точек данных для pluralRu. */
+  unit: readonly [string, string, string];
+}
+
+const SOURCE_META: Record<SourceId, SourceMeta> = {
+  openaq: {
+    name: 'Станции OpenAQ',
+    note: 'Сеть городских сенсоров AirGradient',
+    status: { ok: 'работают', error: 'временно недоступны', off: 'не подключены' },
+    unit: ['станция', 'станции', 'станций'],
+  },
+  waqi: {
+    name: 'Станции WAQI',
+    note: 'Казгидромет и посольство США',
+    status: { ok: 'работают', error: 'временно недоступны', off: 'не подключены' },
+    unit: ['станция', 'станции', 'станций'],
+  },
+  openmeteo: {
+    name: 'Модель CAMS (Copernicus)',
+    note: 'Европейская служба мониторинга атмосферы',
+    status: { ok: 'работает', error: 'временно недоступна', off: 'не подключена' },
+    unit: ['точка', 'точки', 'точек'],
+  },
+};
 
 const TONE_DOT: Record<Tone, string> = {
   ok: 'bg-emerald-500',
-  error: 'bg-red-500',
+  error: 'bg-amber-500',
   off: 'bg-zinc-400',
 };
 
-const TONE_LABEL: Record<Tone, string> = {
-  ok: 'работает',
-  error: 'ошибка',
-  off: 'не настроен',
-};
-
-/** Честный статус источника: не настроен / ошибка (с причиной) / N станций. */
+/**
+ * Тон и строка статуса без внутреннего жаргона: жителю не нужны слова
+ * «ключ», «API» или коды HTTP — только работает источник или нет.
+ */
 function describe(source: SourceStatus): { tone: Tone; text: string } {
-  if (!source.configured) {
-    return { tone: 'off', text: 'Не настроен: нужен ключ API.' };
-  }
-  if (!source.ok) {
-    return {
-      tone: 'error',
-      text: source.detail ? `Ошибка: ${source.detail}.` : 'Ошибка запроса.',
-    };
-  }
+  const meta = SOURCE_META[source.id];
+  if (!source.configured) return { tone: 'off', text: meta.status.off };
+  if (!source.ok) return { tone: 'error', text: meta.status.error };
   const n = source.stations;
-  const unit =
-    source.id === 'openmeteo'
-      ? pluralRu(n, ['точка модели', 'точки модели', 'точек модели'])
-      : pluralRu(n, ['станция', 'станции', 'станций']);
-  return { tone: 'ok', text: `Работает: ${n} ${unit}.` };
+  return { tone: 'ok', text: `${meta.status.ok}, ${n} ${pluralRu(n, meta.unit)}` };
 }
 
-/** Блок статуса источников данных: по карточке на провайдера, без приукрашивания. */
+/**
+ * Статус источников данных: одна понятная строка на источник.
+ * Активные — зелёная точка («Модель CAMS (Copernicus) — работает, 8 точек»),
+ * неподключённые — нейтрально и приглушённо, без алармизма.
+ */
 export function SourcesStatus({ sources, className = '' }: SourcesStatusProps) {
   return (
-    <ul className={`grid gap-3 sm:grid-cols-3 ${className}`}>
+    <ul className={`space-y-3 rounded-2xl border border-border bg-card p-4 ${className}`}>
       {sources.map((source) => {
         const meta = SOURCE_META[source.id];
-        const status = describe(source);
+        const { tone, text } = describe(source);
+        const off = tone === 'off';
         return (
-          <li key={source.id} className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-center gap-2">
-              <span
-                aria-label={TONE_LABEL[status.tone]}
-                role="img"
-                className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[status.tone]}`}
-              />
-              <h3 className="text-sm font-semibold">{meta.name}</h3>
+          <li key={source.id} className="flex items-start gap-2.5">
+            <span
+              aria-hidden="true"
+              className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_DOT[tone]}`}
+            />
+            <div className="min-w-0">
+              <p className={`text-sm ${off ? 'text-muted' : ''}`}>
+                <span className={off ? undefined : 'font-medium'}>{meta.name}</span>
+                {' — '}
+                {text}
+              </p>
+              <p className="text-xs text-muted">{meta.note}</p>
             </div>
-            <p className="mt-0.5 text-xs text-muted">{meta.note}</p>
-            <p className="mt-2 text-sm">{status.text}</p>
           </li>
         );
       })}

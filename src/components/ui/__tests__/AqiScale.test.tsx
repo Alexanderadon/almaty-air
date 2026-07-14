@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Тесты легенды шкалы AQI: шесть сегментов и защита от наложения подписей
- * на узких экранах — длинные слова («Чувствительным») обязаны переноситься
- * внутри своей ячейки (hyphens-auto + break-words), а не выезжать на соседей.
+ * Тесты легенды шкалы AQI: шесть категорий и два представления —
+ * вертикальный список на узких экранах (короткие названия, ничего не
+ * переносится посреди слова) и горизонтальная полоса на md+ (полные
+ * названия). Скрытие — через классы md:hidden / hidden md:block, поэтому
+ * в живом дереве доступности всегда одно представление.
  */
 
 import { cleanup, render, screen, within } from '@testing-library/react';
@@ -21,17 +23,22 @@ describe('AqiScale', () => {
       name: 'Шкала индекса качества воздуха AQI (US EPA)',
     });
     expect(within(list).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(list).getByText('0–50')).toBeTruthy();
-    expect(within(list).getByText('301–500')).toBeTruthy();
+    // Диапазон присутствует в обоих представлениях (мобильный список и полоса md+)
+    expect(within(list).getAllByText('0–50').length).toBeGreaterThan(0);
+    expect(within(list).getAllByText('301–500').length).toBeGreaterThan(0);
   });
 
-  it('подписи категорий переносятся по словам внутри ячейки (узкие экраны)', () => {
+  it('мобильный список и полоса md+ переключаются брейкпоинтом', () => {
     render(<AqiScale />);
-    // Самое длинное неразрывное слово мобильной подписи — регресс наложения
-    // подписей на 360px без break-words/hyphens-auto.
-    const label = screen.getByText('Чувствительным');
-    const wrapper = label.parentElement;
-    expect(wrapper?.className).toContain('break-words');
-    expect(wrapper?.className).toContain('hyphens-auto');
+    // Короткое название живёт в мобильной строке — она скрыта на md+.
+    // Регресс исходного бага: «Чувствительным» рвалось посреди слова
+    // внутри узкой ячейки горизонтальной полосы.
+    const shortLabel = screen.getByText('Чувствительным');
+    expect(shortLabel.parentElement?.className).toContain('md:hidden');
+    // Полное название — только в полосе md+ (обёртка hidden md:block).
+    const fullLabel = screen.getByText('Вредно для чувствительных');
+    expect(fullLabel.parentElement?.parentElement?.className).toContain(
+      'hidden md:block',
+    );
   });
 });

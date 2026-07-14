@@ -2,14 +2,23 @@ import type { Metadata } from 'next';
 import { cache } from 'react';
 import { citySourceSummary } from '@/components/home/citySource';
 import { DistrictCard } from '@/components/home/DistrictCard';
+import { DistrictRanking } from '@/components/home/DistrictRanking';
+import { FaqSection } from '@/components/home/FaqSection';
 import { SourcesStatus } from '@/components/home/SourcesStatus';
 import { MapPanel } from '@/components/map/MapPanel';
+import {
+  faqPageJsonLd,
+  JsonLd,
+  webApplicationJsonLd,
+  websiteJsonLd,
+} from '@/components/seo/JsonLd';
 import { AdviceCard } from '@/components/ui/AdviceCard';
 import { AqiBadge } from '@/components/ui/AqiBadge';
 import { AqiScale } from '@/components/ui/AqiScale';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SourceNote } from '@/components/ui/SourceNote';
 import { UpdatedAt } from '@/components/ui/UpdatedAt';
+import { FAQ_ITEMS } from '@/content/faq';
 import { aqiCategory } from '@/lib/aqi';
 import { assertSourcesUpDuringBuild } from '@/lib/build-guard';
 import { DISTRICTS } from '@/lib/districts';
@@ -25,23 +34,25 @@ const PM_FMT = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
 const NAME_BY_SLUG = new Map(DISTRICTS.map((d) => [d.slug, d.nameRu]));
 
 export async function generateMetadata(): Promise<Metadata> {
+  // title не задаём: главная использует поисковый title.default из layout
+  // («Качество воздуха в Алматы сейчас — AQI по районам, PM2.5»).
   const air = await getCityAirCached();
   const aqi = air.citywide.aqi;
   if (aqi === null) {
     return {
-      title: 'Качество воздуха сейчас',
+      alternates: { canonical: '/' },
       description:
-        'Карта качества воздуха в Алматы по восьми районам: индекс AQI, концентрации PM2.5 и PM10, практические рекомендации жителям.',
+        'Качество воздуха в Алматы сейчас: карта по восьми районам, индекс AQI, PM2.5 и PM10, практические рекомендации жителям. Данные станций и модели CAMS.',
     };
   }
   const cat = aqiCategory(aqi);
   const pm25 = air.citywide.pm25;
   return {
-    title: `Сейчас AQI ${aqi} · ${cat.labelRu}`,
+    alternates: { canonical: '/' },
     description:
       `Качество воздуха в Алматы сейчас: AQI ${aqi} (${cat.labelRu.toLowerCase()})` +
       (pm25 !== null ? `, PM2.5 ${PM_FMT.format(pm25)} мкг/м³` : '') +
-      '. Карта по восьми районам, данные станций мониторинга и модели CAMS, рекомендации жителям.',
+      '. Карта по восьми районам, данные станций и модели CAMS, рекомендации жителям.',
   };
 }
 
@@ -60,6 +71,9 @@ export default async function Home() {
           <h2 id="sources-heading" className="text-lg font-semibold tracking-tight">
             Источники данных
           </h2>
+          <p className="mt-1 text-sm text-muted">
+            Сайт всегда показывает, откуда взято каждое число.
+          </p>
           <SourcesStatus sources={air.sources} className="mt-4" />
         </section>
       </main>
@@ -74,6 +88,12 @@ export default async function Home() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 md:py-10">
+      {/* Структурированные данные: сайт, веб-приложение и FAQ (тот же
+          src/content/faq.ts, что рендерит FaqSection ниже). */}
+      <JsonLd data={websiteJsonLd()} />
+      <JsonLd data={webApplicationJsonLd()} />
+      <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
+
       {/* Герой: индекс по городу */}
       <section aria-labelledby="hero-heading">
         <div className="flex flex-col gap-6 md:flex-row md:items-center">
@@ -137,6 +157,9 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Рейтинг районов по текущему AQI (сам скрывается, если данных нет) */}
+      <DistrictRanking districts={air.districts} className="mt-10" />
+
       {/* Легенда шкалы AQI */}
       <section aria-labelledby="scale-heading" className="mt-10">
         <h2 id="scale-heading" className="text-lg font-semibold tracking-tight">
@@ -153,8 +176,14 @@ export default async function Home() {
         <h2 id="sources-heading" className="text-lg font-semibold tracking-tight">
           Источники данных
         </h2>
+        <p className="mt-1 text-sm text-muted">
+          Сайт всегда показывает, откуда взято каждое число.
+        </p>
         <SourcesStatus sources={air.sources} className="mt-4" />
       </section>
+
+      {/* FAQ о воздухе в Алматы */}
+      <FaqSection className="mt-10" />
     </main>
   );
 }

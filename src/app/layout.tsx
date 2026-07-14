@@ -28,13 +28,13 @@ export const metadata: Metadata = {
     apple: '/icons/apple-touch-icon.png',
   },
   title: {
-    default: 'Воздух Алматы — качество воздуха в реальном времени',
+    default: 'Качество воздуха в Алматы сейчас — AQI по районам, PM2.5',
     template: '%s — Воздух Алматы',
   },
   description:
-    'Качество воздуха в Алматы по районам: индекс AQI, концентрации PM2.5 и PM10, история изменений и практические рекомендации. Данные станций мониторинга и модели CAMS (Copernicus).',
+    'Качество воздуха в Алматы сейчас: индекс AQI по восьми районам, PM2.5 и PM10, графики за 24 часа и 30 дней, рекомендации жителям. Данные станций и модели CAMS.',
   openGraph: {
-    title: 'Воздух Алматы — качество воздуха в реальном времени',
+    title: 'Качество воздуха в Алматы сейчас — AQI по районам, PM2.5',
     description:
       'Индекс AQI, PM2.5 и PM10 по восьми районам Алматы: карта, история и рекомендации.',
     siteName: 'Воздух Алматы',
@@ -62,9 +62,12 @@ export default function RootLayout({
             экономит DNS+TCP+TLS на первом тайле. React 19 поднимает <link> в <head>. */}
         <link rel="preconnect" href="https://tile.openstreetmap.org" />
         <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+        {/* Ссылка видима ТОЛЬКО при клавиатурном фокусе (:focus-visible).
+            Вариант focus: раскрывал её и на programmatic/tap-фокус — на
+            мобильных это давало «посторонний прямоугольник» поверх страницы. */}
         <a
           href="#content"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:shadow-lg"
+          className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-lg focus-visible:bg-card focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:shadow-lg"
         >
           К основному содержимому
         </a>
