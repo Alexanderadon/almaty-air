@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 /** Логотип: две горы Заилийского Алатау и солнце. */
 function LogoMark() {
@@ -17,7 +18,7 @@ function LogoMark() {
   );
 }
 
-/** Шапка сайта: логотип-ссылка на главную, без лишней навигации. */
+/** Шапка сайта: логотип-ссылка на главную, подпись о шкале и переключатель темы. */
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-md">
@@ -29,7 +30,13 @@ export function SiteHeader() {
           <LogoMark />
           <span className="text-[17px]">Воздух Алматы</span>
         </Link>
-        <p className="hidden text-xs text-muted sm:block">AQI по шкале US EPA</p>
+        <div className="flex items-center gap-3">
+          {/* Подпись скрыта на мобильных (sm:block) — переключатель остаётся. */}
+          <p className="hidden text-xs text-muted sm:block">
+            AQI по шкале US EPA
+          </p>
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );
