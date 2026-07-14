@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Генерируемые артефакты (не коммитятся):
+    "public/sw.js",
+    "public/swe-worker-*.js",
+    "src/generated/**",
   ]),
 ]);
 

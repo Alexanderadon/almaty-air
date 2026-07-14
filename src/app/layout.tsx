@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/react';
 import { SiteHeader } from '@/components/ui/SiteHeader';
 import { SiteFooter } from '@/components/ui/SiteFooter';
+import { InstallHint } from '@/components/pwa/InstallHint';
 import './globals.css';
 
 const inter = Inter({
@@ -12,6 +14,19 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://almaty-air-two.vercel.app'),
+  applicationName: 'Воздух Алматы',
+  // Ссылку rel="manifest" добавляет файловая конвенция src/app/manifest.ts.
+  appleWebApp: {
+    capable: true,
+    title: 'Воздух',
+    statusBarStyle: 'default',
+  },
+  // Явная конфигурация иконок: при заданном metadata.icons Next не добавляет
+  // автоссылку на файловую конвенцию app/icon.svg, поэтому указываем обе.
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: '/icons/apple-touch-icon.png',
+  },
   title: {
     default: 'Воздух Алматы — качество воздуха в реальном времени',
     template: '%s — Воздух Алматы',
@@ -54,6 +69,8 @@ export default function RootLayout({
           {children}
         </div>
         <SiteFooter />
+        <InstallHint />
+        <Analytics />
       </body>
     </html>
   );
