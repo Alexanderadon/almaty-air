@@ -1,26 +1,105 @@
 @import "tailwindcss";
 
+/*
+ * Дизайн-токены «Воздух Алматы».
+ *
+ * Цвета категорий AQI зеркалят палитру AQI_CATEGORIES из src/lib/aqi.ts —
+ * единственного источника истины. При изменении палитры обновлять оба файла.
+ * Пары «фон / текст» проверены на контраст WCAG AA (≥ 4.5:1).
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  color-scheme: light dark;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* --- Категории AQI: фон и текст поверх фона (не зависят от темы) --- */
+  --aqi-good: #F5F0BB;
+  --aqi-good-text: #3D3808;
+  --aqi-moderate: #F2C94C;
+  --aqi-moderate-text: #4A3405;
+  --aqi-usg: #E98A3C;
+  --aqi-usg-text: #4A2504;
+  --aqi-unhealthy: #C0503F;
+  --aqi-unhealthy-text: #FFFFFF;
+  --aqi-very-unhealthy: #8E3B6B;
+  --aqi-very-unhealthy-text: #FFFFFF;
+  --aqi-hazardous: #4A1D4F;
+  --aqi-hazardous-text: #F5D7F7;
+
+  /* --- Поверхности и текст: светлая тема --- */
+  --surface: #F7F7F4;
+  --card: #FFFFFF;
+  --foreground: #22211C;
+  --muted: #6C6960;
+  --border: #E5E3DB;
+  --accent: #2557C7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --surface: #101216;
+    --card: #181B21;
+    --foreground: #E8EAED;
+    --muted: #A0A6B0;
+    --border: #2A2E36;
+    --accent: #8AB0F8;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  /* Шрифт: переменная --font-inter задаётся next/font в layout.tsx */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Поверхности и текст */
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+
+  /* Категории AQI как утилиты Tailwind (bg-aqi-good, text-aqi-good-text, …) */
+  --color-aqi-good: var(--aqi-good);
+  --color-aqi-good-text: var(--aqi-good-text);
+  --color-aqi-moderate: var(--aqi-moderate);
+  --color-aqi-moderate-text: var(--aqi-moderate-text);
+  --color-aqi-usg: var(--aqi-usg);
+  --color-aqi-usg-text: var(--aqi-usg-text);
+  --color-aqi-unhealthy: var(--aqi-unhealthy);
+  --color-aqi-unhealthy-text: var(--aqi-unhealthy-text);
+  --color-aqi-very-unhealthy: var(--aqi-very-unhealthy);
+  --color-aqi-very-unhealthy-text: var(--aqi-very-unhealthy-text);
+  --color-aqi-hazardous: var(--aqi-hazardous);
+  --color-aqi-hazardous-text: var(--aqi-hazardous-text);
+
+  /* Шкала радиусов (явно зафиксирована как часть дизайн-системы) */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+
+  /* База шкалы отступов: p-4 = 1rem, gap-2 = 0.5rem и т.д. */
+  --spacing: 0.25rem;
+}
+
+@layer base {
+  body {
+    background-color: var(--surface);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* Видимый фокус для клавиатурной навигации — на всех интерактивных элементах */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  ::selection {
+    background-color: var(--accent);
+    color: var(--surface);
+  }
 }
