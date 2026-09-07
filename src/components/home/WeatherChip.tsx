@@ -24,7 +24,8 @@ export function WeatherChip({ weather, className = '' }: WeatherChipProps) {
   if (weather === null) return null;
   const view = describeWeatherCode(weather.weatherCode);
   const wind = weather.windSpeedMs !== null ? Math.round(weather.windSpeedMs) : null;
-  const detail = wind !== null ? `${view.labelRu} · ветер ${wind} м/с` : view.labelRu;
+  const windText = wind !== null ? ` · ветер ${wind} м/с` : '';
+  const detail = `${view.labelRu}${windText}`;
 
   return (
     <div
@@ -36,7 +37,11 @@ export function WeatherChip({ weather, className = '' }: WeatherChipProps) {
       <WeatherIcon kind={view.kind} isDay={weather.isDay} className="h-9 w-9 shrink-0 text-muted" />
       <div className="min-w-0 max-w-44">
         <p className="text-2xl font-semibold leading-none">{formatTemperature(weather.temperatureC)}</p>
-        <p className="mt-1 text-sm leading-snug text-muted">{detail}</p>
+        {/* «ветер 3 м/с» не переносится внутри: браузер иначе ломает строку по слэшу. */}
+        <p className="mt-1 text-sm leading-snug text-muted">
+          {view.labelRu}
+          {windText !== '' && <span className="whitespace-nowrap">{windText}</span>}
+        </p>
       </div>
     </div>
   );

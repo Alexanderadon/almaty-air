@@ -23,6 +23,7 @@ import {
   type Tone,
 } from './ridges';
 import { SceneMotion } from './SceneMotion';
+import { SceneWalkers } from './SceneWalkers';
 
 export interface HeroSceneProps {
   /** AQI по городу — плотность смога; null — чистые горы. */
@@ -112,13 +113,14 @@ function spruce(x: number, base: number, h: number): string {
 }
 
 /*
- * Видимая часть viewBox: xMidYMax slice при высоте 260 показывает на десктопе
- * (контейнер ~976 px) только x ≈ 232…1208, на телефоне ≈ 422…1018. Ели и
- * башня ставятся внутрь этой зоны, иначе они за кадром.
+ * Видимая часть viewBox: xMidYMax slice показывает на десктопе (сцена 260 px,
+ * контейнер ~976 px) x ≈ 232…1208, на телефоне (сцена 150 px, ширина 390)
+ * ≈ 382…1058. Ели и башня ставятся внутрь мобильной зоны — тогда они в кадре
+ * везде; башня под луной (x 985 против 1010) — открыточная композиция.
  */
 const SPRUCE_ZONES: readonly [number, number][] = [
-  [240, 430],
-  [1000, 1200],
+  [390, 560],
+  [860, 1050],
 ];
 const SPRUCES = SPRUCE_ZONES.flatMap(([from, to], z) =>
   Array.from({ length: 12 }, (_, i) => {
@@ -129,7 +131,7 @@ const SPRUCES = SPRUCE_ZONES.flatMap(([from, to], z) =>
 );
 
 /** Телебашня на Кок-Тобе — самый узнаваемый силуэт над городом; стоит на ближнем гребне. */
-const TOWER_X = 1150;
+const TOWER_X = 985;
 const TOWER_BASE = silhouetteAt(NEAR.vertices, TOWER_X) + 1;
 const TOWER_H = 68;
 
@@ -271,7 +273,7 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
     <div
       data-hero-scene=""
       aria-hidden="true"
-      className="hero-scene pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[170px] overflow-hidden sm:h-[260px]"
+      className="hero-scene pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[150px] overflow-hidden sm:h-[260px]"
     >
       <SceneMotion />
 
@@ -384,6 +386,9 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
           <circle key={i} cx={l.x} cy={l.y} r={l.r} fill="var(--city-light)" opacity={l.opacity} />
         ))}
       </RidgeSvg>
+
+      {/* Прохожие по нижней кромке — под нижним слоем смога, в грязный воздух тонут в дымке */}
+      <SceneWalkers />
 
       {fog > 0 && (
         <div
