@@ -50,6 +50,7 @@
   --snow-lit: #FFFFFF;
   --snow-shade: #D8E2EF;
   --mist: #EEF1F6;
+  --skyglow: #B9CBE3;
   --star: transparent;
   --moon: transparent;
   --sun: #F3CC66;
@@ -88,6 +89,7 @@
   --dark-snow-lit: #E3E8F2;
   --dark-snow-shade: #A9B3C9;
   --dark-mist: #8C97AD;
+  --dark-skyglow: #7E8AA6;
   --dark-star: #C7CDD8;
   --dark-moon: #DCE1EA;
   --dark-sun: #E9D48A;
@@ -130,6 +132,7 @@
   --snow-lit: var(--dark-snow-lit);
   --snow-shade: var(--dark-snow-shade);
   --mist: var(--dark-mist);
+  --skyglow: var(--dark-skyglow);
   --star: var(--dark-star);
   --moon: var(--dark-moon);
   --sun: var(--dark-sun);
@@ -168,6 +171,7 @@
     --snow-lit: var(--dark-snow-lit);
     --snow-shade: var(--dark-snow-shade);
     --mist: var(--dark-mist);
+    --skyglow: var(--dark-skyglow);
     --star: var(--dark-star);
     --moon: var(--dark-moon);
     --sun: var(--dark-sun);
