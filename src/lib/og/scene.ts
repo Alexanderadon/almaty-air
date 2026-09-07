@@ -14,6 +14,7 @@ import {
   CITY_LIGHTS,
   FAR,
   FOG_ELLIPSES,
+  HALO_STEPS,
   LUMINARY,
   MID,
   NEAR,
@@ -71,14 +72,15 @@ export function ogSceneSvg(width: number, height: number, aqi: number | null): s
 
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice">`,
-    `<defs>${clip('og-far-lit', FAR.triangles.filter((t) => t.tone === 'lit'))}${clip('og-far-shade', FAR.triangles.filter((t) => t.tone !== 'lit'))}</defs>`,
+    `<defs>${clip('og-far-lit', FAR.triangles.filter((t) => t.tone === 'lit'))}${clip('og-far-shade', FAR.triangles.filter((t) => t.tone !== 'lit'))}` +
+      `<mask id="og-moon-bite"><rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/><circle cx="${LUMINARY.cx + 6}" cy="${LUMINARY.cy - 4}" r="${LUMINARY.r - 2}" fill="#000"/></mask></defs>`,
     `<rect x="0" y="0" width="${W}" height="${H}" fill="${c.sky}"/>`,
     ...SKY_BANDS.map((b) => `<rect x="0" y="${b.y}" width="${W}" height="${b.h}" fill="${c.skyglow}" opacity="${b.opacity}"/>`),
     ...STARS.map((s) => `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${c.star}" opacity="${s.opacity}"/>`),
-    `<circle cx="${LUMINARY.cx}" cy="${LUMINARY.cy}" r="${LUMINARY.r + 20}" fill="${c.moon}" opacity="0.05"/>`,
-    `<circle cx="${LUMINARY.cx}" cy="${LUMINARY.cy}" r="${LUMINARY.r + 9}" fill="${c.moon}" opacity="0.07"/>`,
-    `<circle cx="${LUMINARY.cx}" cy="${LUMINARY.cy}" r="${LUMINARY.r}" fill="${c.moon}"/>`,
-    `<circle cx="${LUMINARY.cx + 6}" cy="${LUMINARY.cy - 4}" r="${LUMINARY.r - 2}" fill="${c.sky}"/>`,
+    ...HALO_STEPS.map(
+      (s) => `<circle cx="${LUMINARY.cx}" cy="${LUMINARY.cy}" r="${LUMINARY.r + s.dr}" fill="${c.moon}" opacity="${s.opacity}"/>`,
+    ),
+    `<circle cx="${LUMINARY.cx}" cy="${LUMINARY.cy}" r="${LUMINARY.r}" fill="${c.moon}" mask="url(#og-moon-bite)"/>`,
     ridge(FAR, c.far),
     `<path d="${SNOW}" fill="${c.snowShade}" clip-path="url(#og-far-shade)"/>`,
     `<path d="${SNOW}" fill="${c.snowLit}" clip-path="url(#og-far-lit)"/>`,

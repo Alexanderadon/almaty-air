@@ -7,6 +7,7 @@ import {
   CITY_LIGHTS,
   FAR,
   FOG_ELLIPSES,
+  HALO_STEPS,
   hash01,
   LUMINARY,
   MID,
@@ -199,16 +200,24 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
         {clearSky &&
           (isDay ? (
             <>
-              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 22} fill="var(--sun)" opacity={0.08} />
-              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 10} fill="var(--sun)" opacity={0.12} />
+              {HALO_STEPS.map((s) => (
+                <circle key={s.dr} cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + s.dr} fill="var(--sun)" opacity={s.opacity * 1.5} />
+              ))}
               <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 1} fill="var(--sun)" />
             </>
           ) : (
             <>
-              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 20} fill="var(--moon)" opacity={0.05} />
-              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 9} fill="var(--moon)" opacity={0.07} />
-              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r} fill="var(--moon)" />
-              <circle cx={LUMINARY.cx + 6} cy={LUMINARY.cy - 4} r={LUMINARY.r - 2} fill="var(--surface)" />
+              {/* Серп — маской, а не кругом цвета неба поверх: иначе вырез дырявил ореол. */}
+              <defs>
+                <mask id="hero-moon-bite">
+                  <rect x="0" y="0" width={SCENE_BOX.width} height={SCENE_BOX.height} fill="#fff" />
+                  <circle cx={LUMINARY.cx + 6} cy={LUMINARY.cy - 4} r={LUMINARY.r - 2} fill="#000" />
+                </mask>
+              </defs>
+              {HALO_STEPS.map((s) => (
+                <circle key={s.dr} cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + s.dr} fill="var(--moon)" opacity={s.opacity} />
+              ))}
+              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r} fill="var(--moon)" mask="url(#hero-moon-bite)" />
             </>
           ))}
       </RidgeSvg>
