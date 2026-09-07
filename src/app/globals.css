@@ -98,7 +98,7 @@
   --dark-city-light: #F2C98A;
   --dark-spruce: #0E121A;
   --dark-tower-light: #FF5A45;
-  --dark-figure: #B4BCCB;
+  --dark-figure: #0E121A;
   --dark-smog: #8A8376;
   --dark-smog-particle: #B8B0A2;
   --dark-rain: #6E7B8B;
@@ -357,91 +357,85 @@
   will-change: transform, opacity;
 }
 
-/* Прохожие (SceneWalkers): без анимации скрыты — базовое состояние hidden. */
+/* Прохожие (SceneWalkers): без анимации скрыты — базовое состояние hidden.
+   Траектории (@keyframes scene-walk-*) генерирует компонент из рельефа. */
 .scene-walker {
   visibility: hidden;
-  will-change: transform;
 }
 
-.scene-walker-flip {
-  transform: scaleX(-1);
+.scene-walker-body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
 }
 
-.scene-pose-b {
+/* Кадры походки: все скрыты, анимация по очереди показывает каждый на свою
+   долю шага (имя/длительность/сдвиг задаёт компонент инлайном). */
+.scene-pose {
   opacity: 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Общий цикл 200 с: персонаж идёт первые 22% (44 с) от правого края за
-     левый (100vw + своя ширина — герой не шире окна), остальное время
-     скрыт. Задержки (--delay) разводят четверых по очереди. */
-  @keyframes scene-walk {
-    0% {
-      transform: translateX(0);
-      visibility: visible;
-    }
-    22% {
-      transform: translateX(calc(-100vw - 100%));
-      visibility: visible;
-    }
-    22.01%,
-    100% {
-      transform: translateX(calc(-100vw - 100%));
-      visibility: hidden;
-    }
-  }
-
-  /* Два кадра походки: steps(1) переключает раз в 0,35 с. */
-  @keyframes scene-pose-a {
-    0%,
-    49.9% {
-      opacity: 1;
-    }
-    50%,
-    100% {
-      opacity: 0;
-    }
-  }
-
-  @keyframes scene-pose-b {
-    0%,
-    49.9% {
-      opacity: 0;
-    }
-    50%,
-    100% {
-      opacity: 1;
-    }
-  }
-
-  @keyframes scene-bob {
-    from {
-      transform: translateY(0);
-    }
-    to {
-      transform: translateY(-1.5px);
-    }
-  }
-
+  /* Общий цикл 400 с: персонаж идёт первые 20% (80 с) по линии гребня,
+     остальное время скрыт; задержки (--delay) разводят четверых по очереди.
+     Имя анимации задаётся инлайном (у каждого своя траектория). */
   .scene-walker {
-    animation: scene-walk 200s linear infinite;
+    animation-duration: 400s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
     animation-delay: var(--delay, 0s);
   }
 
+  /* Переваливается с ноги на ногу: корпус качается ±4° от стоп, полупериод
+     равен одному шагу (длительность задаёт компонент). */
+  @keyframes scene-waddle {
+    from {
+      transform: rotate(-4deg) translateY(0);
+    }
+    to {
+      transform: rotate(4deg) translateY(-0.7px);
+    }
+  }
+
   .scene-walker-body {
-    animation: scene-bob 0.35s ease-in-out infinite alternate;
+    animation-name: scene-waddle;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
   }
 
-  .scene-walker-flip {
-    animation: scene-bob 0.35s ease-in-out infinite alternate;
+  /* Кадр виден 1/2 или 1/4 цикла шага; steps(1) держит значение начала
+     интервала и переключает в его конце — резко, как спрайт. */
+  @keyframes scene-pose-2 {
+    0% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
   }
 
-  .scene-pose-a {
-    animation: scene-pose-a 0.7s steps(1) infinite;
+  @keyframes scene-pose-4 {
+    0% {
+      opacity: 1;
+    }
+    25%,
+    100% {
+      opacity: 0;
+    }
   }
 
-  .scene-pose-b {
-    animation: scene-pose-b 0.7s steps(1) infinite;
+  .scene-pose {
+    animation-timing-function: steps(1);
+    animation-iteration-count: infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-walker,
+  .scene-walker-body,
+  .scene-pose {
+    animation: none !important;
   }
 }
 

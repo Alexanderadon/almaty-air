@@ -348,6 +348,9 @@ export const FAR_MESH: MeshOptions = { minWidth: 34, jitter: 16, splitWidth: 58 
 export const MID_MESH: MeshOptions = { minWidth: 60, jitter: 12, splitWidth: 88 };
 export const NEAR_MESH: MeshOptions = { minWidth: 96, jitter: 0, splitWidth: 130 };
 
+/** Вершины силуэта ближнего гребня — общая опора для елей, башни и прохожих. */
+export const NEAR_VERTICES: readonly Point[] = ridgeVertices(RIDGE_NEAR, SCENE_BOX, NEAR_MESH.minWidth);
+
 /** Линия снега дальнего хребта: выше неё (меньше y) склоны белые. */
 export const SNOW_LINE_Y = 100;
 export const SNOW_WOBBLE = 7;
