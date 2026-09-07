@@ -1,14 +1,20 @@
-/** Процедурный рельеф: детерминизм, границы, форма path, снежная полоса. */
+/** Процедурный рельеф: детерминизм, границы, low-poly-сетка, снежная полоса. */
 
 import { describe, expect, it } from 'vitest';
 
 import {
+  FAR_BASE_Y,
+  FAR_FACET_WIDTH,
+  MID_BASE_Y,
+  MID_FACET_WIDTH,
+  NEAR_BASE_Y,
+  NEAR_FACET_WIDTH,
   RIDGE_FAR,
   RIDGE_MID,
   RIDGE_NEAR,
-  ridgeFacets,
-  ridgePath,
+  ridgeMesh,
   ridgeProfile,
+  ridgeVertices,
   SCENE_BOX,
   SNOW_LINE_Y,
   SNOW_SEED,
@@ -16,36 +22,11 @@ import {
   snowBandPath,
 } from '../ridges';
 
-describe('ridgeFacets', () => {
-  it('грани покрывают хребет от левого до правого края без дыр, чередуя свет и тень', () => {
-    for (const spec of [RIDGE_FAR, RIDGE_MID, RIDGE_NEAR]) {
-      const facets = ridgeFacets(spec);
-      expect(facets.length).toBeGreaterThan(4);
-      expect(facets.length).toBeLessThan(80);
-      expect(facets[0].d.startsWith('M0 ')).toBe(true);
-      expect(facets[facets.length - 1].d).toContain(`L${SCENE_BOX.width} `);
-      // Лента глубины: ни одна точка не ниже земли.
-      for (const f of facets) {
-        for (const m of f.d.matchAll(/[ML]-?\d+(?:\.\d+)? (-?\d+(?:\.\d+)?)/g)) {
-          expect(Number(m[1])).toBeLessThanOrEqual(SCENE_BOX.height);
-        }
-      }
-      // Перегиб меняет направление склона: соседние грани в основном разного
-      // тона (слияние узких полос изредка ставит рядом две одинаковые).
-      let alternating = 0;
-      for (let i = 1; i < facets.length; i += 1) {
-        if (facets[i].lit !== facets[i - 1].lit) alternating += 1;
-      }
-      expect(alternating / (facets.length - 1)).toBeGreaterThan(0.6);
-      expect(facets.some((f) => f.lit)).toBe(true);
-      expect(facets.some((f) => !f.lit)).toBe(true);
-    }
-  });
-
-  it('детерминированы', () => {
-    expect(ridgeFacets(RIDGE_FAR)).toEqual(ridgeFacets(RIDGE_FAR));
-  });
-});
+const RIDGES = [
+  { spec: RIDGE_FAR, base: FAR_BASE_Y, width: FAR_FACET_WIDTH },
+  { spec: RIDGE_MID, base: MID_BASE_Y, width: MID_FACET_WIDTH },
+  { spec: RIDGE_NEAR, base: NEAR_BASE_Y, width: NEAR_FACET_WIDTH },
+];
 
 describe('ridgeProfile', () => {
   it('детерминирован по спецификации, разный сид — разный профиль', () => {
@@ -76,25 +57,70 @@ describe('ridgeProfile', () => {
   });
 });
 
-describe('ridgePath / snowBandPath', () => {
-  it('path начинается в x=0, заканчивается на земле и замкнут', () => {
-    const d = ridgePath(RIDGE_MID);
-    expect(d.startsWith('M0 ')).toBe(true);
-    expect(d.endsWith(` L${SCENE_BOX.width} ${SCENE_BOX.height} L0 ${SCENE_BOX.height} Z`)).toBe(
-      true,
-    );
-    // Последняя точка профиля — ровно на правом краю.
-    expect(d).toContain(`L${SCENE_BOX.width} `);
+describe('ridgeVertices', () => {
+  it('от левого до правого края, x строго растёт, вершины выше базовой линии', () => {
+    for (const { spec, base, width } of RIDGES) {
+      const v = ridgeVertices(spec, SCENE_BOX, width);
+      expect(v.length).toBeGreaterThan(8);
+      expect(v.length).toBeLessThan(80);
+      expect(v[0].x).toBe(0);
+      expect(v[v.length - 1].x).toBe(SCENE_BOX.width);
+      for (let i = 1; i < v.length; i += 1) expect(v[i].x).toBeGreaterThan(v[i - 1].x);
+      for (const p of v) expect(p.y).toBeLessThan(base);
+    }
   });
 
-  it('снежная полоса идёт от верха viewBox до волнистой линии около SNOW_LINE_Y', () => {
+  it('дальний хребет дробнее ближнего', () => {
+    expect(ridgeVertices(RIDGE_FAR, SCENE_BOX, FAR_FACET_WIDTH).length).toBeGreaterThan(
+      ridgeVertices(RIDGE_NEAR, SCENE_BOX, NEAR_FACET_WIDTH).length,
+    );
+  });
+});
+
+describe('ridgeMesh', () => {
+  it('2n−1 треугольников: n встречных у базы и n−1 под отрезками гребня; есть свет и тень', () => {
+    for (const { spec, base, width } of RIDGES) {
+      const n = ridgeVertices(spec, SCENE_BOX, width).length;
+      const mesh = ridgeMesh(spec, base, SCENE_BOX, width);
+      expect(mesh.triangles).toHaveLength(2 * n - 1);
+      expect(mesh.triangles.filter((t) => !t.crest)).toHaveLength(n);
+      expect(mesh.triangles.filter((t) => t.crest && t.tone === 'lit').length).toBeGreaterThan(0);
+      expect(mesh.triangles.filter((t) => t.crest && t.tone === 'shade').length).toBeGreaterThan(
+        0,
+      );
+      expect(mesh.triangles.filter((t) => !t.crest).every((t) => t.tone === 'mid')).toBe(true);
+      expect(mesh.baseY).toBe(base);
+      expect(mesh.outline.startsWith('M0 ')).toBe(true);
+      expect(mesh.outline.endsWith(` L${SCENE_BOX.width} ${SCENE_BOX.height} L0 ${SCENE_BOX.height} Z`)).toBe(
+        true,
+      );
+    }
+  });
+
+  it('свет — на склонах, спускающихся вправо (светило справа)', () => {
+    const v = ridgeVertices(RIDGE_FAR, SCENE_BOX, FAR_FACET_WIDTH);
+    const crest = ridgeMesh(RIDGE_FAR, FAR_BASE_Y, SCENE_BOX, FAR_FACET_WIDTH).triangles.filter(
+      (t) => t.crest,
+    );
+    for (let i = 0; i < crest.length; i += 1) {
+      expect(crest[i].tone).toBe(v[i + 1].y > v[i].y ? 'lit' : 'shade');
+    }
+  });
+
+  it('детерминирована', () => {
+    expect(ridgeMesh(RIDGE_MID, MID_BASE_Y)).toEqual(ridgeMesh(RIDGE_MID, MID_BASE_Y));
+  });
+});
+
+describe('snowBandPath', () => {
+  it('идёт от верха viewBox до ломаной около SNOW_LINE_Y', () => {
     const d = snowBandPath(SNOW_LINE_Y, SNOW_WOBBLE, SNOW_SEED);
     expect(d.startsWith(`M0 0 L${SCENE_BOX.width} 0`)).toBe(true);
     expect(d.endsWith('Z')).toBe(true);
     const ys = [...d.matchAll(/L\d+(?:\.\d+)? (-?\d+(?:\.\d+)?)/g)]
       .map((m) => Number(m[1]))
       .filter((y) => y !== 0);
-    expect(ys.length).toBeGreaterThan(100);
+    expect(ys.length).toBeGreaterThan(20);
     for (const y of ys) {
       expect(Math.abs(y - SNOW_LINE_Y)).toBeLessThanOrEqual(SNOW_WOBBLE + 0.1);
     }

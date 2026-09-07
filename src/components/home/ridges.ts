@@ -1,8 +1,9 @@
 /**
  * Процедурный рельеф для сцены в герое: гребни Заилийского Алатау как
  * фрактальный шум (fBm) поверх «массивов» — гауссовых холмов, задающих
- * главные вершины. Детерминирован сидом: серверный HTML воспроизводим.
- * Чистая математика, без DOM — покрыта тестами.
+ * главные вершины, — и low-poly-сетка треугольников по этому рельефу
+ * для плоской фасетной подсветки. Детерминирован сидом: серверный HTML
+ * воспроизводим. Чистая математика, без DOM — покрыта тестами.
  */
 
 /** Габариты viewBox сцены; y = height — «земля». */
@@ -87,41 +88,18 @@ export function ridgeProfile(spec: RidgeSpec, box = SCENE_BOX): number[] {
   return ys;
 }
 
-/** Замкнутый path гребня: линия профиля, затем вниз к земле и обратно. */
-export function ridgePath(spec: RidgeSpec, box = SCENE_BOX): string {
-  const ys = ridgeProfile(spec, box);
-  const parts = ys.map((y, i) => `${i === 0 ? 'M' : 'L'}${fmt(Math.min(i * spec.step, box.width))} ${fmt(y)}`);
-  return `${parts.join(' ')} L${box.width} ${box.height} L0 ${box.height} Z`;
+export interface Point {
+  x: number;
+  y: number;
 }
-
-export interface Facet {
-  /** Замкнутый path вертикальной полосы под профилем между двумя перегибами. */
-  d: string;
-  /** Склон обращён к свету (свет справа: склон спускается вправо). */
-  lit: boolean;
-}
-
-/** Нахлёст соседних граней, чтобы антиалиасинг не рисовал светлый волосок на стыке. */
-const FACET_OVERLAP = 0.7;
 
 /**
- * Грани гребня для плоской «фасетной» подсветки: профиль сглаживается
- * окном ~44 px, перегибы сглаженной кривой режут хребет на полосы; полосы
- * уже minWidth сливаются с соседними. Каждая полоса — склон: спускается
- * вправо → обращён к свету (луна/солнце справа) → lit.
- *
- * Грань — лента глубиной depth под линией гребня (нижний край повторяет
- * профиль), а не столб до земли: столбы читались вертикальными полосами.
- * Тело гребня под лентами заливается теневым тоном отдельно (ridgePath).
- * Соседние ленты стыкуются с нахлёстом FACET_OVERLAP, чтобы антиалиасинг
- * не рисовал светлый волосок на шве.
+ * Вершины low-poly-силуэта: перегибы сглаженного профиля (окно ~44 px),
+ * полосы уже minWidth сливаются с соседними; каждая вершина уточняется
+ * до настоящего экстремума профиля в окне — пики остаются острыми.
+ * Первая вершина всегда на x = 0, последняя — на x = width.
  */
-export function ridgeFacets(
-  spec: RidgeSpec,
-  box = SCENE_BOX,
-  minWidth = 28,
-  depth = 48,
-): Facet[] {
+export function ridgeVertices(spec: RidgeSpec, box = SCENE_BOX, minWidth = 40): Point[] {
   const ys = ridgeProfile(spec, box);
   const n = ys.length;
   const half = Math.max(1, Math.round(22 / spec.step));
@@ -137,7 +115,6 @@ export function ridgeFacets(
     return sum / count;
   });
 
-  // Перегибы сглаженного профиля (смена знака производной).
   const cuts = [0];
   let prevSign = 0;
   for (let i = 1; i < n; i += 1) {
@@ -148,7 +125,6 @@ export function ridgeFacets(
   }
   cuts.push(n - 1);
 
-  // Узкие полосы — в соседнюю; последняя граница (правый край) остаётся всегда.
   const merged = [cuts[0]];
   for (let i = 1; i < cuts.length; i += 1) {
     const last = merged[merged.length - 1];
@@ -157,52 +133,101 @@ export function ridgeFacets(
     if (cuts[i] > last) merged.push(cuts[i]);
   }
 
-  const facets: Facet[] = [];
   const xAt = (i: number) => Math.min(i * spec.step, box.width);
-  for (let k = 0; k < merged.length - 1; k += 1) {
-    const i0 = merged[k];
-    const i1 = merged[k + 1];
-    const lit = smooth[i1] > smooth[i0];
-    const x0 = k === 0 ? 0 : xAt(i0) - FACET_OVERLAP;
-    const x1 = k === merged.length - 2 ? box.width : xAt(i1) + FACET_OVERLAP;
-    // Лента сужается от вершины (полная глубина) к долине (четверть):
-    // освещённая грань читается треугольником склона, а не прямоугольником.
-    const peakAtStart = smooth[i0] < smooth[i1];
-    const span = Math.max(1, i1 - i0);
-    const low = (i: number) => {
-      const t = (i - i0) / span;
-      const taper = peakAtStart ? 1 - 0.75 * t : 0.25 + 0.75 * t;
-      return fmt(Math.min(box.height, ys[i] + depth * taper));
-    };
-    const top: string[] = [];
-    for (let i = i0; i <= i1; i += 1) top.push(`L${fmt(xAt(i))} ${fmt(ys[i])}`);
-    const bottom: string[] = [];
-    for (let i = i1; i >= i0; i -= 1) bottom.push(`L${fmt(xAt(i))} ${low(i)}`);
-    facets.push({
-      d:
-        `M${fmt(x0)} ${low(i0)} L${fmt(x0)} ${fmt(ys[i0])} ${top.join(' ')} ` +
-        `L${fmt(x1)} ${fmt(ys[i1])} L${fmt(x1)} ${low(i1)} ${bottom.join(' ')} Z`,
-      lit,
-    });
+  const vertices: Point[] = [];
+  for (let k = 0; k < merged.length; k += 1) {
+    const c = merged[k];
+    if (k === 0 || k === merged.length - 1) {
+      vertices.push({ x: xAt(c), y: ys[c] });
+      continue;
+    }
+    const peak = smooth[c] <= smooth[c - 1] && smooth[c] <= smooth[Math.min(n - 1, c + 1)];
+    let best = c;
+    for (let i = Math.max(0, c - half); i <= Math.min(n - 1, c + half); i += 1) {
+      if (peak ? ys[i] < ys[best] : ys[i] > ys[best]) best = i;
+    }
+    const prev = vertices[vertices.length - 1];
+    if (xAt(best) - prev.x < 8) continue;
+    vertices.push({ x: xAt(best), y: ys[best] });
   }
-  return facets;
+  // Последняя вершина обязана быть на правом краю (уточнение могло её сдвинуть).
+  const last = vertices[vertices.length - 1];
+  if (last.x < box.width) vertices.push({ x: box.width, y: ys[n - 1] });
+  return vertices;
+}
+
+export type Tone = 'lit' | 'mid' | 'shade';
+
+export interface Triangle {
+  d: string;
+  tone: Tone;
+  /** Треугольник под отрезком гребня (верхняя грань); false — встречный, у базы. */
+  crest: boolean;
+}
+
+export interface RidgeMesh {
+  triangles: Triangle[];
+  /** Контур гребня до земли — для clipPath снега и тела под базовой линией. */
+  outline: string;
+  baseY: number;
+}
+
+function tri(a: Point, b: Point, c: Point): string {
+  return `M${fmt(a.x)} ${fmt(a.y)} L${fmt(b.x)} ${fmt(b.y)} L${fmt(c.x)} ${fmt(c.y)} Z`;
 }
 
 /**
- * Полоса «неба до линии снега»: от верха viewBox вниз до волнистой линии
- * y = snowLineY + wobble·noise. В обрезке (clipPath) по гребню остаются
- * только вершины выше линии — естественные снежники, повторяющие рельеф.
+ * Low-poly-сетка гребня. Вершины силуэта V₀…Vₙ; базовые точки Bᵢ — на
+ * линии baseY посередине между соседними вершинами, плюс крайние на x = 0
+ * и x = width. Под каждым отрезком гребня — треугольник (Vᵢ, Vᵢ₊₁, Bᵢ):
+ * склон спускается вправо → обращён к свету (светило справа) → lit, иначе
+ * shade. Между ними встречные треугольники (Vᵢ, Bᵢ₋₁, Bᵢ) средним тоном.
+ * Вместе они без зазоров замощают полосу между силуэтом и базовой линией.
+ */
+export function ridgeMesh(
+  spec: RidgeSpec,
+  baseY: number,
+  box = SCENE_BOX,
+  minWidth = 40,
+): RidgeMesh {
+  const v = ridgeVertices(spec, box, minWidth);
+  const n = v.length;
+  const bases: Point[] = [{ x: 0, y: baseY }];
+  for (let i = 0; i < n - 1; i += 1) bases.push({ x: (v[i].x + v[i + 1].x) / 2, y: baseY });
+  bases.push({ x: box.width, y: baseY });
+
+  const triangles: Triangle[] = [];
+  for (let i = 0; i < n; i += 1) {
+    triangles.push({ d: tri(v[i], bases[i], bases[i + 1]), tone: 'mid', crest: false });
+  }
+  for (let i = 0; i < n - 1; i += 1) {
+    const lit = v[i + 1].y > v[i].y;
+    triangles.push({ d: tri(v[i], v[i + 1], bases[i + 1]), tone: lit ? 'lit' : 'shade', crest: true });
+  }
+
+  const outline =
+    v.map((p, i) => `${i === 0 ? 'M' : 'L'}${fmt(p.x)} ${fmt(p.y)}`).join(' ') +
+    ` L${box.width} ${box.height} L0 ${box.height} Z`;
+
+  return { triangles, outline, baseY };
+}
+
+/**
+ * Полоса «неба до линии снега»: от верха viewBox вниз до ломаной
+ * y = snowLineY + wobble·noise с шагом step (полигональный край в стиле
+ * low-poly). В обрезке (clipPath) по граням остаются только вершины выше
+ * линии — снежники, повторяющие рельеф.
  */
 export function snowBandPath(
   snowLineY: number,
   wobble: number,
   seed: number,
-  step = 12,
+  step = 48,
   box = SCENE_BOX,
 ): string {
   const parts: string[] = [`M0 0`, `L${box.width} 0`];
   for (let x = box.width; x >= 0; x -= step) {
-    const y = snowLineY + wobble * noise1D(seed, x / 70);
+    const y = snowLineY + wobble * noise1D(seed, x / 150);
     parts.push(`L${fmt(x)} ${fmt(y)}`);
   }
   return `${parts.join(' ')} Z`;
@@ -251,6 +276,16 @@ export const RIDGE_NEAR: RidgeSpec = {
   ],
   step: 10,
 };
+
+/** Базовые линии сеток: дальний хребет уходит под средний, ближний — под землю. */
+export const FAR_BASE_Y = 206;
+export const MID_BASE_Y = 244;
+export const NEAR_BASE_Y = 262;
+
+/** Минимальная ширина грани: дальний хребет — мелкие острые грани, ближний — крупные. */
+export const FAR_FACET_WIDTH = 34;
+export const MID_FACET_WIDTH = 60;
+export const NEAR_FACET_WIDTH = 96;
 
 /** Линия снега дальнего хребта: выше неё (меньше y) склоны белые. */
 export const SNOW_LINE_Y = 100;

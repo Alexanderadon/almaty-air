@@ -3,17 +3,23 @@ import type { CurrentWeather } from '@/lib/sources/weather';
 import { describeWeatherCode, sceneFor } from '@/lib/weather-codes';
 import { HAZE_BOX, hazeLevel, hazeParticles } from './haze';
 import {
-  type Facet,
+  FAR_BASE_Y,
+  FAR_FACET_WIDTH,
+  MID_BASE_Y,
+  MID_FACET_WIDTH,
+  NEAR_BASE_Y,
+  NEAR_FACET_WIDTH,
   RIDGE_FAR,
   RIDGE_MID,
   RIDGE_NEAR,
-  ridgeFacets,
-  ridgePath,
+  type RidgeMesh,
+  ridgeMesh,
   SCENE_BOX,
   SNOW_LINE_Y,
   SNOW_SEED,
   SNOW_WOBBLE,
   snowBandPath,
+  type Tone,
 } from './ridges';
 import { SceneMotion } from './SceneMotion';
 
@@ -24,13 +30,10 @@ export interface HeroSceneProps {
   weather: CurrentWeather | null;
 }
 
-/* Тела гребней, грани и снег считаются один раз на модуль: сцена детерминирована. */
-const FAR_BODY = ridgePath(RIDGE_FAR);
-const MID_BODY = ridgePath(RIDGE_MID);
-const NEAR_BODY = ridgePath(RIDGE_NEAR);
-const FAR = ridgeFacets(RIDGE_FAR, SCENE_BOX, 28, 72);
-const MID = ridgeFacets(RIDGE_MID, SCENE_BOX, 28, 40);
-const NEAR = ridgeFacets(RIDGE_NEAR, SCENE_BOX, 28, 26);
+/* Сетки гребней и снег считаются один раз на модуль: сцена детерминирована. */
+const FAR = ridgeMesh(RIDGE_FAR, FAR_BASE_Y, SCENE_BOX, FAR_FACET_WIDTH);
+const MID = ridgeMesh(RIDGE_MID, MID_BASE_Y, SCENE_BOX, MID_FACET_WIDTH);
+const NEAR = ridgeMesh(RIDGE_NEAR, NEAR_BASE_Y, SCENE_BOX, NEAR_FACET_WIDTH);
 const SNOW = snowBandPath(SNOW_LINE_Y, SNOW_WOBBLE, SNOW_SEED);
 
 /** Облака: ширина (% героя), высота положения (% сцены), период и сдвиг фазы. */
@@ -108,27 +111,50 @@ function FogBank({ color }: { color: string }) {
   );
 }
 
-/** Гребень: тело теневым тоном, поверх — освещённые ленты граней вдоль линии хребта. */
-function Ridge({
-  body,
-  facets,
-  lit,
-  shade,
-}: {
-  body: string;
-  facets: Facet[];
-  lit: string;
-  shade: string;
-}) {
+/**
+ * Гребень low-poly: под базовой линией — тело теневым тоном, выше —
+ * треугольники сетки тремя тонами. Обводка в цвет заливки (0.8 px) гасит
+ * волоски антиалиасинга на общих рёбрах соседних треугольников.
+ */
+function Ridge({ mesh, tones }: { mesh: RidgeMesh; tones: Record<Tone, string> }) {
   return (
     <>
-      <path d={body} fill={shade} />
-      {facets.filter((f) => f.lit).map((f) => (
-        <path key={f.d} d={f.d} fill={lit} />
+      <rect
+        x={0}
+        y={mesh.baseY}
+        width={SCENE_BOX.width}
+        height={Math.max(0, SCENE_BOX.height - mesh.baseY)}
+        fill={tones.shade}
+      />
+      {mesh.triangles.map((t) => (
+        <path
+          key={t.d}
+          d={t.d}
+          fill={tones[t.tone]}
+          stroke={tones[t.tone]}
+          strokeWidth={0.8}
+          strokeLinejoin="round"
+        />
       ))}
     </>
   );
 }
+
+const FAR_TONES: Record<Tone, string> = {
+  lit: 'var(--ridge-far-lit)',
+  mid: 'var(--ridge-far-mid)',
+  shade: 'var(--ridge-far-shade)',
+};
+const MID_TONES: Record<Tone, string> = {
+  lit: 'var(--ridge-mid-lit)',
+  mid: 'var(--ridge-mid-mid)',
+  shade: 'var(--ridge-mid-shade)',
+};
+const NEAR_TONES: Record<Tone, string> = {
+  lit: 'var(--ridge-near-lit)',
+  mid: 'var(--ridge-near-mid)',
+  shade: 'var(--ridge-near-shade)',
+};
 
 function RidgeSvg({ children }: { children: React.ReactNode }) {
   return (
@@ -226,31 +252,22 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
       {/* Дальний хребет со снегом и средний гребень */}
       <RidgeSvg>
         <defs>
+          {/* Снег ложится на грани: белый — на освещённые, голубоватый — на теневые и встречные. */}
           <clipPath id="hero-far-lit">
-            {FAR.filter((f) => f.lit).map((f) => (
-              <path key={f.d} d={f.d} />
+            {FAR.triangles.filter((t) => t.tone === 'lit').map((t) => (
+              <path key={t.d} d={t.d} />
             ))}
           </clipPath>
           <clipPath id="hero-far-shade">
-            {FAR.filter((f) => !f.lit).map((f) => (
-              <path key={f.d} d={f.d} />
+            {FAR.triangles.filter((t) => t.tone !== 'lit').map((t) => (
+              <path key={t.d} d={t.d} />
             ))}
           </clipPath>
         </defs>
-        <Ridge
-          body={FAR_BODY}
-          facets={FAR}
-          lit="var(--ridge-far-lit)"
-          shade="var(--ridge-far-shade)"
-        />
+        <Ridge mesh={FAR} tones={FAR_TONES} />
         <path d={SNOW} fill="var(--snow-shade)" clipPath="url(#hero-far-shade)" />
         <path d={SNOW} fill="var(--snow-lit)" clipPath="url(#hero-far-lit)" />
-        <Ridge
-          body={MID_BODY}
-          facets={MID}
-          lit="var(--ridge-mid-lit)"
-          shade="var(--ridge-mid-shade)"
-        />
+        <Ridge mesh={MID} tones={MID_TONES} />
       </RidgeSvg>
 
       {/* Постоянная дымка между средним и ближним гребнями — воздушная перспектива */}
@@ -271,12 +288,7 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
       )}
 
       <RidgeSvg>
-        <Ridge
-          body={NEAR_BODY}
-          facets={NEAR}
-          lit="var(--ridge-near-lit)"
-          shade="var(--ridge-near-shade)"
-        />
+        <Ridge mesh={NEAR} tones={NEAR_TONES} />
       </RidgeSvg>
 
       {fog > 0 && (

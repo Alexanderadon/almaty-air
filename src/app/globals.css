@@ -37,12 +37,15 @@
      теневой (shade); дальний — светлее и синее (воздушная перспектива),
      ближний — темнее. Снег тоже двухтоновый. Смог — тёплый серый, чтобы
      читался на холодных горах. */
-  --ridge-far-lit: #CBD3E0;
-  --ridge-far-shade: #B1BBCD;
-  --ridge-mid-lit: #A3AEC3;
-  --ridge-mid-shade: #8792AA;
-  --ridge-near-lit: #7E8AA0;
-  --ridge-near-shade: #667287;
+  --ridge-far-lit: #CDD5E2;
+  --ridge-far-mid: #BFC8D7;
+  --ridge-far-shade: #AFB9CC;
+  --ridge-mid-lit: #A6B1C5;
+  --ridge-mid-mid: #97A2B8;
+  --ridge-mid-shade: #8591A9;
+  --ridge-near-lit: #808CA2;
+  --ridge-near-mid: #737F95;
+  --ridge-near-shade: #657186;
   --snow-lit: #FFFFFF;
   --snow-shade: #DAE1EC;
   --mist: #E6EAF1;
@@ -69,12 +72,15 @@
   --dark-accent: #8AB0F8;
   /* Сцена: ночь в синих тонах — дальний хребет светлее (лунная дымка),
      ближний почти сливается с небом, снег и звёзды холодные. */
-  --dark-ridge-far-lit: #4C5673;
-  --dark-ridge-far-shade: #3A4359;
-  --dark-ridge-mid-lit: #343C54;
-  --dark-ridge-mid-shade: #262D41;
-  --dark-ridge-near-lit: #22283A;
-  --dark-ridge-near-shade: #191E2B;
+  --dark-ridge-far-lit: #4F5A78;
+  --dark-ridge-far-mid: #444E68;
+  --dark-ridge-far-shade: #384158;
+  --dark-ridge-mid-lit: #363F58;
+  --dark-ridge-mid-mid: #2E364C;
+  --dark-ridge-mid-shade: #252C40;
+  --dark-ridge-near-lit: #232A3C;
+  --dark-ridge-near-mid: #1E2434;
+  --dark-ridge-near-shade: #181D2A;
   --dark-snow-lit: #E3E8F2;
   --dark-snow-shade: #A9B3C9;
   --dark-mist: #8C97AD;
@@ -106,10 +112,13 @@
   --border: var(--dark-border);
   --accent: var(--dark-accent);
   --ridge-far-lit: var(--dark-ridge-far-lit);
+  --ridge-far-mid: var(--dark-ridge-far-mid);
   --ridge-far-shade: var(--dark-ridge-far-shade);
   --ridge-mid-lit: var(--dark-ridge-mid-lit);
+  --ridge-mid-mid: var(--dark-ridge-mid-mid);
   --ridge-mid-shade: var(--dark-ridge-mid-shade);
   --ridge-near-lit: var(--dark-ridge-near-lit);
+  --ridge-near-mid: var(--dark-ridge-near-mid);
   --ridge-near-shade: var(--dark-ridge-near-shade);
   --snow-lit: var(--dark-snow-lit);
   --snow-shade: var(--dark-snow-shade);
@@ -138,10 +147,13 @@
     --border: var(--dark-border);
     --accent: var(--dark-accent);
     --ridge-far-lit: var(--dark-ridge-far-lit);
+    --ridge-far-mid: var(--dark-ridge-far-mid);
     --ridge-far-shade: var(--dark-ridge-far-shade);
     --ridge-mid-lit: var(--dark-ridge-mid-lit);
+    --ridge-mid-mid: var(--dark-ridge-mid-mid);
     --ridge-mid-shade: var(--dark-ridge-mid-shade);
     --ridge-near-lit: var(--dark-ridge-near-lit);
+    --ridge-near-mid: var(--dark-ridge-near-mid);
     --ridge-near-shade: var(--dark-ridge-near-shade);
     --snow-lit: var(--dark-snow-lit);
     --snow-shade: var(--dark-snow-shade);
