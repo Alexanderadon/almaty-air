@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { cache, type CSSProperties } from 'react';
+import { cache } from 'react';
 import { AnimatedAqi } from '@/components/home/AnimatedAqi';
 import { citySourceSummary } from '@/components/home/citySource';
 import { DistrictList } from '@/components/home/DistrictList';
@@ -109,17 +109,14 @@ export default async function Home() {
       <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
 
       {/* Герой: индекс по городу, состояние словами и совет — одним блоком
-          на фоне силуэта Заилийского Алатау. --hero-tint — цвет текущей
-          категории AQI: фон тихо меняется вместе с состоянием воздуха.
+          над силуэтом Заилийского Алатау. Смог в силуэте (туман и частицы)
+          плотнеет с ростом AQI — фон показывает состояние воздуха буквально.
           relative + isolate + overflow-hidden держат силуэт под текстом
-          и не дают ему создать горизонтальный скролл. */}
-      <section
-        aria-labelledby="hero-heading"
-        className="relative isolate overflow-hidden"
-        style={{ '--hero-tint': category?.color ?? 'var(--accent)' } as CSSProperties}
-      >
-        <HeroSkyline />
-        <div className="flex flex-col gap-6 pb-12 md:flex-row md:items-center md:gap-8 md:pb-14">
+          и не дают ему создать горизонтальный скролл; нижний отступ —
+          место под горы. */}
+      <section aria-labelledby="hero-heading" className="relative isolate overflow-hidden">
+        <HeroSkyline aqi={aqi} />
+        <div className="flex flex-col gap-6 pb-[125px] md:flex-row md:items-center md:gap-8 md:pb-[165px]">
           <AnimatedAqi value={aqi}>
             <AqiBadge aqi={aqi} size="lg" className="self-start" />
           </AnimatedAqi>

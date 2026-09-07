@@ -32,6 +32,16 @@
   --border: #E5E3DB;
   --accent: #2557C7;
 
+  /* --- Силуэт гор в герое (HeroSkyline) ---
+     Гребни — подмес --foreground в --surface, поэтому сами подстраиваются
+     под тему; снег и смог — явные значения для каждой темы. */
+  --ridge-far: color-mix(in srgb, var(--foreground) 13%, var(--surface));
+  --ridge-mid: color-mix(in srgb, var(--foreground) 20%, var(--surface));
+  --ridge-near: color-mix(in srgb, var(--foreground) 28%, var(--surface));
+  --snow: #FFFFFF;
+  --smog: #ADA391;
+  --smog-particle: #7F7664;
+
   /*
    * --- Тёмная палитра (константы) ---
    * Значения объявлены ОДИН раз и подключаются из двух контекстов ниже:
@@ -44,6 +54,9 @@
   --dark-muted: #A0A6B0;
   --dark-border: #2A2E36;
   --dark-accent: #8AB0F8;
+  --dark-snow: #A5ACB8;
+  --dark-smog: #8A8376;
+  --dark-smog-particle: #B8B0A2;
 }
 
 /*
@@ -63,6 +76,9 @@
   --muted: var(--dark-muted);
   --border: var(--dark-border);
   --accent: var(--dark-accent);
+  --snow: var(--dark-snow);
+  --smog: var(--dark-smog);
+  --smog-particle: var(--dark-smog-particle);
 }
 
 :root[data-theme='light'] {
@@ -78,6 +94,9 @@
     --muted: var(--dark-muted);
     --border: var(--dark-border);
     --accent: var(--dark-accent);
+    --snow: var(--dark-snow);
+    --smog: var(--dark-smog);
+    --smog-particle: var(--dark-smog-particle);
   }
 }
 
@@ -193,5 +212,34 @@
 
   details[open] .faq-answer {
     animation: faq-answer-in 200ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+/* Смог в герое (HeroSkyline): туман и частицы один раз проявляются при
+   загрузке — самозавершающаяся анимация с fill-mode both, после неё кадр
+   статичен (в покое — ноль работающих анимаций, машина не греется).
+   Частицы выходят с разбегом по индексу (--i). Без анимации (reduced
+   motion) — сразу конечное состояние, атрибуты opacity на элементах. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes haze-particle-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+
+  @keyframes haze-fog-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .haze-particle {
+    animation: haze-particle-in 1400ms cubic-bezier(0.2, 0, 0, 1) both;
+    animation-delay: calc(var(--i, 0) * 28ms);
+  }
+
+  .haze-fog {
+    animation: haze-fog-in 1800ms ease-out both;
   }
 }
