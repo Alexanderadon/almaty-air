@@ -100,9 +100,14 @@ function spruce(x: number, base: number, h: number): string {
   );
 }
 
+/*
+ * Видимая часть viewBox: xMidYMax slice при высоте 260 показывает на десктопе
+ * (контейнер ~976 px) только x ≈ 232…1208, на телефоне ≈ 422…1018. Ели и
+ * башня ставятся внутрь этой зоны, иначе они за кадром.
+ */
 const SPRUCE_ZONES: readonly [number, number][] = [
-  [20, 330],
-  [1010, 1420],
+  [240, 430],
+  [1000, 1200],
 ];
 const SPRUCES = SPRUCE_ZONES.flatMap(([from, to], z) =>
   Array.from({ length: 12 }, (_, i) => {
@@ -113,7 +118,7 @@ const SPRUCES = SPRUCE_ZONES.flatMap(([from, to], z) =>
 );
 
 /** Телебашня на Кок-Тобе — самый узнаваемый силуэт над городом; стоит на ближнем гребне. */
-const TOWER_X = 1236;
+const TOWER_X = 1150;
 const TOWER_BASE = silhouetteAt(NEAR.vertices, TOWER_X) + 1;
 const TOWER_H = 68;
 
