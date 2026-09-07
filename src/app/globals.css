@@ -32,16 +32,26 @@
   --border: #E5E3DB;
   --accent: #2557C7;
 
-  /* --- Силуэт гор в герое (HeroSkyline) ---
-     Гребни — подмес --foreground в --surface, поэтому сами подстраиваются
-     под тему; снег и смог — явные значения для каждой темы. */
-  --ridge-far: color-mix(in srgb, var(--foreground) 13%, var(--surface));
-  --ridge-mid: color-mix(in srgb, var(--foreground) 20%, var(--surface));
-  --ridge-near: color-mix(in srgb, var(--foreground) 28%, var(--surface));
-  --snow: #FFFFFF;
+  /* --- Сцена в герое (HeroScene): светлая тема — день в дымке ---
+     Каждый гребень в двух тонах: освещённый склон (lit, свет справа) и
+     теневой (shade); дальний — светлее и синее (воздушная перспектива),
+     ближний — темнее. Снег тоже двухтоновый. Смог — тёплый серый, чтобы
+     читался на холодных горах. */
+  --ridge-far-lit: #CBD3E0;
+  --ridge-far-shade: #B1BBCD;
+  --ridge-mid-lit: #A3AEC3;
+  --ridge-mid-shade: #8792AA;
+  --ridge-near-lit: #7E8AA0;
+  --ridge-near-shade: #667287;
+  --snow-lit: #FFFFFF;
+  --snow-shade: #DAE1EC;
+  --mist: #E6EAF1;
+  --star: transparent;
+  --moon: #CBD1DC;
+  --sun: #F0CF6E;
+  --cloud: #E8EBF1;
   --smog: #ADA391;
   --smog-particle: #7F7664;
-  --cloud: #DEDCD4;
   --rain: #93A3B3;
   --snowflake: #FFFFFF;
 
@@ -57,10 +67,23 @@
   --dark-muted: #A0A6B0;
   --dark-border: #2A2E36;
   --dark-accent: #8AB0F8;
-  --dark-snow: #A5ACB8;
+  /* Сцена: ночь в синих тонах — дальний хребет светлее (лунная дымка),
+     ближний почти сливается с небом, снег и звёзды холодные. */
+  --dark-ridge-far-lit: #4C5673;
+  --dark-ridge-far-shade: #3A4359;
+  --dark-ridge-mid-lit: #343C54;
+  --dark-ridge-mid-shade: #262D41;
+  --dark-ridge-near-lit: #22283A;
+  --dark-ridge-near-shade: #191E2B;
+  --dark-snow-lit: #E3E8F2;
+  --dark-snow-shade: #A9B3C9;
+  --dark-mist: #8C97AD;
+  --dark-star: #C7CDD8;
+  --dark-moon: #DCE1EA;
+  --dark-sun: #E9D48A;
+  --dark-cloud: #2C3346;
   --dark-smog: #8A8376;
   --dark-smog-particle: #B8B0A2;
-  --dark-cloud: #363A43;
   --dark-rain: #6E7B8B;
   --dark-snowflake: #C9CED8;
 }
@@ -82,7 +105,18 @@
   --muted: var(--dark-muted);
   --border: var(--dark-border);
   --accent: var(--dark-accent);
-  --snow: var(--dark-snow);
+  --ridge-far-lit: var(--dark-ridge-far-lit);
+  --ridge-far-shade: var(--dark-ridge-far-shade);
+  --ridge-mid-lit: var(--dark-ridge-mid-lit);
+  --ridge-mid-shade: var(--dark-ridge-mid-shade);
+  --ridge-near-lit: var(--dark-ridge-near-lit);
+  --ridge-near-shade: var(--dark-ridge-near-shade);
+  --snow-lit: var(--dark-snow-lit);
+  --snow-shade: var(--dark-snow-shade);
+  --mist: var(--dark-mist);
+  --star: var(--dark-star);
+  --moon: var(--dark-moon);
+  --sun: var(--dark-sun);
   --smog: var(--dark-smog);
   --smog-particle: var(--dark-smog-particle);
   --cloud: var(--dark-cloud);
@@ -103,7 +137,18 @@
     --muted: var(--dark-muted);
     --border: var(--dark-border);
     --accent: var(--dark-accent);
-    --snow: var(--dark-snow);
+    --ridge-far-lit: var(--dark-ridge-far-lit);
+    --ridge-far-shade: var(--dark-ridge-far-shade);
+    --ridge-mid-lit: var(--dark-ridge-mid-lit);
+    --ridge-mid-shade: var(--dark-ridge-mid-shade);
+    --ridge-near-lit: var(--dark-ridge-near-lit);
+    --ridge-near-shade: var(--dark-ridge-near-shade);
+    --snow-lit: var(--dark-snow-lit);
+    --snow-shade: var(--dark-snow-shade);
+    --mist: var(--dark-mist);
+    --star: var(--dark-star);
+    --moon: var(--dark-moon);
+    --sun: var(--dark-sun);
     --smog: var(--dark-smog);
     --smog-particle: var(--dark-smog-particle);
     --cloud: var(--dark-cloud);

@@ -6,6 +6,7 @@ import {
   RIDGE_FAR,
   RIDGE_MID,
   RIDGE_NEAR,
+  ridgeFacets,
   ridgePath,
   ridgeProfile,
   SCENE_BOX,
@@ -14,6 +15,37 @@ import {
   SNOW_WOBBLE,
   snowBandPath,
 } from '../ridges';
+
+describe('ridgeFacets', () => {
+  it('грани покрывают хребет от левого до правого края без дыр, чередуя свет и тень', () => {
+    for (const spec of [RIDGE_FAR, RIDGE_MID, RIDGE_NEAR]) {
+      const facets = ridgeFacets(spec);
+      expect(facets.length).toBeGreaterThan(4);
+      expect(facets.length).toBeLessThan(80);
+      expect(facets[0].d.startsWith('M0 ')).toBe(true);
+      expect(facets[facets.length - 1].d).toContain(`L${SCENE_BOX.width} `);
+      // Лента глубины: ни одна точка не ниже земли.
+      for (const f of facets) {
+        for (const m of f.d.matchAll(/[ML]-?\d+(?:\.\d+)? (-?\d+(?:\.\d+)?)/g)) {
+          expect(Number(m[1])).toBeLessThanOrEqual(SCENE_BOX.height);
+        }
+      }
+      // Перегиб меняет направление склона: соседние грани в основном разного
+      // тона (слияние узких полос изредка ставит рядом две одинаковые).
+      let alternating = 0;
+      for (let i = 1; i < facets.length; i += 1) {
+        if (facets[i].lit !== facets[i - 1].lit) alternating += 1;
+      }
+      expect(alternating / (facets.length - 1)).toBeGreaterThan(0.6);
+      expect(facets.some((f) => f.lit)).toBe(true);
+      expect(facets.some((f) => !f.lit)).toBe(true);
+    }
+  });
+
+  it('детерминированы', () => {
+    expect(ridgeFacets(RIDGE_FAR)).toEqual(ridgeFacets(RIDGE_FAR));
+  });
+});
 
 describe('ridgeProfile', () => {
   it('детерминирован по спецификации, разный сид — разный профиль', () => {
