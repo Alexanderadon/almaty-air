@@ -41,6 +41,9 @@
   --snow: #FFFFFF;
   --smog: #ADA391;
   --smog-particle: #7F7664;
+  --cloud: #DEDCD4;
+  --rain: #93A3B3;
+  --snowflake: #FFFFFF;
 
   /*
    * --- Тёмная палитра (константы) ---
@@ -57,6 +60,9 @@
   --dark-snow: #A5ACB8;
   --dark-smog: #8A8376;
   --dark-smog-particle: #B8B0A2;
+  --dark-cloud: #363A43;
+  --dark-rain: #6E7B8B;
+  --dark-snowflake: #C9CED8;
 }
 
 /*
@@ -79,6 +85,9 @@
   --snow: var(--dark-snow);
   --smog: var(--dark-smog);
   --smog-particle: var(--dark-smog-particle);
+  --cloud: var(--dark-cloud);
+  --rain: var(--dark-rain);
+  --snowflake: var(--dark-snowflake);
 }
 
 :root[data-theme='light'] {
@@ -97,6 +106,9 @@
     --snow: var(--dark-snow);
     --smog: var(--dark-smog);
     --smog-particle: var(--dark-smog-particle);
+    --cloud: var(--dark-cloud);
+    --rain: var(--dark-rain);
+    --snowflake: var(--dark-snowflake);
   }
 }
 
@@ -215,31 +227,111 @@
   }
 }
 
-/* Смог в герое (HeroSkyline): туман и частицы один раз проявляются при
-   загрузке — самозавершающаяся анимация с fill-mode both, после неё кадр
-   статичен (в покое — ноль работающих анимаций, машина не греется).
-   Частицы выходят с разбегом по индексу (--i). Без анимации (reduced
-   motion) — сразу конечное состояние, атрибуты opacity на элементах. */
+/* ==========================================================================
+   Сцена в герое (HeroScene): облака, туман, частицы смога, дождь и снег.
+
+   Всё движение — transform на отдельных слоях с will-change: слой один раз
+   растрируется и дальше только сдвигается композитором, перерисовок и
+   JS-кадров нет. Слои шириной/высотой 200% с дублем содержимого замыкаются
+   сдвигом на −50%/+50% без шва. Вне экрана — пауза (data-paused ставит
+   SceneMotion). При prefers-reduced-motion анимаций нет: облака стоят на
+   позициях покоя (--rest), остальные слои — в исходном положении.
+   ========================================================================== */
+.hero-scene {
+  contain: strict;
+}
+
+.scene-cloud {
+  transform: translateX(var(--rest, 200%)) scale(var(--scale, 1));
+  will-change: transform;
+}
+
+.scene-fog,
+.scene-drift,
+.scene-fall {
+  will-change: transform;
+}
+
+.scene-blob {
+  background: radial-gradient(circle, var(--smog) 0%, transparent 68%);
+}
+
+.scene-raindrop {
+  width: 1px;
+  background-color: var(--rain);
+  transform: rotate(14deg);
+}
+
+.scene-snowflake {
+  background-color: var(--snowflake);
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes haze-particle-in {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-  }
-
-  @keyframes haze-fog-in {
+  @keyframes scene-in {
     from {
       opacity: 0;
     }
   }
 
-  .haze-particle {
-    animation: haze-particle-in 1400ms cubic-bezier(0.2, 0, 0, 1) both;
-    animation-delay: calc(var(--i, 0) * 28ms);
+  @keyframes scene-cloud-drift {
+    from {
+      transform: translateX(0) scale(var(--scale, 1));
+    }
+    to {
+      transform: translateX(560%) scale(var(--scale, 1));
+    }
   }
 
-  .haze-fog {
-    animation: haze-fog-in 1800ms ease-out both;
+  @keyframes scene-drift-x {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes scene-fall {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(50%);
+    }
+  }
+
+  @keyframes scene-breathe {
+    from {
+      transform: translateX(-2.5%);
+    }
+    to {
+      transform: translateX(2.5%);
+    }
+  }
+
+  .hero-scene {
+    animation: scene-in 1200ms ease-out both;
+  }
+
+  .scene-cloud {
+    animation: scene-cloud-drift var(--dur, 150s) linear infinite;
+    animation-delay: var(--delay, 0s);
+  }
+
+  .scene-drift {
+    animation: scene-drift-x var(--dur, 120s) linear infinite;
+  }
+
+  .scene-fall {
+    animation: scene-fall var(--dur, 1s) linear infinite;
+  }
+
+  .scene-fog {
+    animation: scene-breathe var(--dur, 50s) ease-in-out infinite alternate;
+    animation-delay: calc(var(--phase, 0) * -20s);
+  }
+
+  [data-hero-scene][data-paused] * {
+    animation-play-state: paused;
   }
 }

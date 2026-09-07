@@ -13,7 +13,8 @@
 
 ## Архитектура
 
-- `src/lib/sources/` — провайдеры OpenAQ (ключ `OPENAQ_API_KEY`) / WAQI (`WAQI_TOKEN`) / Open-Meteo (без ключа). Никогда не бросают; агрегатор `getCityAir()` собирает что есть.
+- `src/lib/sources/` — провайдеры OpenAQ (ключ `OPENAQ_API_KEY`) / WAQI (`WAQI_TOKEN`) / Open-Meteo (без ключа). Никогда не бросают; агрегатор `getCityAir()` собирает что есть. `sources/weather.ts` — текущая погода Open-Meteo (центр города) для виджета и сцены в герое; декоративный слой, при сбое null.
+- Герой главной: `components/home/HeroScene.tsx` — процедурные гребни (`ridges.ts`, fBm с сидом), смог по AQI (`haze.ts`), облака/осадки по погоде (`lib/weather-codes.ts`). Движение — только CSS transform на слоях-div (без rAF/canvas), вне экрана пауза (`SceneMotion`), reduced-motion — статичный кадр. Локальная проверка «грязного» состояния: временно подставить `aqi={180}` и объект погоды в `page.tsx`, снять скриншот, вернуть.
 - `src/lib/districts.ts` + `src/data/almaty-districts.geo.json` — 8 районов OSM (перегенерация: `node scripts/fetch-districts.mjs`).
 - Карта: Leaflet (только CircleMarker, дефолтные Marker-иконки сломаны под бандлером). Графики: visx (НЕ recharts — решение D3).
 - ISR: revalidate 3600 на страницах, fetch-кэш 1800/3600 в источниках.

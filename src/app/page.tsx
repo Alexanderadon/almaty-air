@@ -4,9 +4,10 @@ import { AnimatedAqi } from '@/components/home/AnimatedAqi';
 import { citySourceSummary } from '@/components/home/citySource';
 import { DistrictList } from '@/components/home/DistrictList';
 import { FaqSection } from '@/components/home/FaqSection';
-import { HeroSkyline } from '@/components/home/HeroSkyline';
+import { HeroScene } from '@/components/home/HeroScene';
 import { MyDistrict } from '@/components/home/MyDistrict';
 import { SourcesStatus } from '@/components/home/SourcesStatus';
+import { WeatherChip } from '@/components/home/WeatherChip';
 import { MapPanel } from '@/components/map/MapPanel';
 import {
   faqPageJsonLd,
@@ -25,6 +26,7 @@ import { aqiCategory } from '@/lib/aqi';
 import { assertSourcesUpDuringBuild } from '@/lib/build-guard';
 import { DISTRICTS } from '@/lib/districts';
 import { getCityAir, getDistrictHistory } from '@/lib/sources';
+import { fetchCurrentWeather } from '@/lib/sources/weather';
 import type { DistrictSlug, HourlyPoint } from '@/lib/types';
 
 export const revalidate = 3600;
@@ -58,10 +60,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  // История за 24 часа для спарклайнов — параллельно с текущими значениями.
-  // Спарклайн — прогрессивное улучшение: сбой истории района отдаёт
-  // undefined, и его строка рендерится без спарклайна.
-  const [air, sparkEntries] = await Promise.all([
+  // История за 24 часа для спарклайнов и погода для героя — параллельно
+  // с текущими значениями. Оба — прогрессивное улучшение: сбой истории
+  // района отдаёт undefined (строка без спарклайна), сбой погоды — null
+  // (герой без виджета, сцена без осадков).
+  const [air, sparkEntries, weather] = await Promise.all([
     getCityAirCached(),
     Promise.all(
       DISTRICTS.map(async (d) => {
@@ -73,6 +76,7 @@ export default async function Home() {
         }
       }),
     ),
+    fetchCurrentWeather(),
   ]);
   const sparks = new Map<DistrictSlug, HourlyPoint[] | undefined>(sparkEntries);
   const allSourcesFailed = air.sources.every((s) => !s.ok);
@@ -108,18 +112,22 @@ export default async function Home() {
       <JsonLd data={webApplicationJsonLd()} />
       <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
 
-      {/* Герой: индекс по городу, состояние словами и совет — одним блоком
-          над силуэтом Заилийского Алатау. Смог в силуэте (туман и частицы)
-          плотнеет с ростом AQI — фон показывает состояние воздуха буквально.
-          relative + isolate + overflow-hidden держат силуэт под текстом
-          и не дают ему создать горизонтальный скролл; нижний отступ —
-          место под горы. */}
+      {/* Герой: индекс по городу, состояние словами и совет — над сценой
+          с Заилийским Алатау (HeroScene): смог плотнеет с ростом AQI,
+          облака и осадки — по текущей погоде; справа — виджет погоды.
+          relative + isolate + overflow-hidden держат сцену под текстом
+          и не дают ей создать горизонтальный скролл; нижний отступ —
+          место под горы. На телефоне бейдж и погода — в одной строке,
+          на md+ обёртка растворяется (contents) и погода уходит вправо. */}
       <section aria-labelledby="hero-heading" className="relative isolate overflow-hidden">
-        <HeroSkyline aqi={aqi} />
-        <div className="flex flex-col gap-6 pb-[125px] md:flex-row md:items-center md:gap-8 md:pb-[165px]">
-          <AnimatedAqi value={aqi}>
-            <AqiBadge aqi={aqi} size="lg" className="self-start" />
-          </AnimatedAqi>
+        <HeroScene aqi={aqi} weather={weather} />
+        <div className="flex flex-col gap-6 pb-[150px] md:flex-row md:items-center md:gap-8 md:pb-[210px]">
+          <div className="flex items-start justify-between gap-4 md:contents">
+            <AnimatedAqi value={aqi}>
+              <AqiBadge aqi={aqi} size="lg" className="self-start" />
+            </AnimatedAqi>
+            <WeatherChip weather={weather} className="md:order-last md:ml-auto md:self-start" />
+          </div>
           <div className="min-w-0 flex-1">
             <h1 id="hero-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
               Качество воздуха в Алматы
