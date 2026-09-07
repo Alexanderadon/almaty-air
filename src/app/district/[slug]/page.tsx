@@ -190,7 +190,7 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         </div>
       </div>
 
-      <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted">
+      <p className="mt-3 text-[15px] leading-relaxed text-muted">
         {DISTRICT_DESCRIPTIONS[slug]}
       </p>
 
