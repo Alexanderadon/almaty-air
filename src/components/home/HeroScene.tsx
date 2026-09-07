@@ -4,17 +4,18 @@ import { describeWeatherCode, sceneFor } from '@/lib/weather-codes';
 import { HAZE_BOX, hazeLevel, hazeParticles } from './haze';
 import {
   FAR_BASE_Y,
-  FAR_FACET_WIDTH,
+  FAR_MESH,
   MID_BASE_Y,
-  MID_FACET_WIDTH,
+  MID_MESH,
   NEAR_BASE_Y,
-  NEAR_FACET_WIDTH,
+  NEAR_MESH,
   RIDGE_FAR,
   RIDGE_MID,
   RIDGE_NEAR,
   type RidgeMesh,
   ridgeMesh,
   SCENE_BOX,
+  silhouetteAt,
   SNOW_LINE_Y,
   SNOW_SEED,
   SNOW_WOBBLE,
@@ -31,9 +32,9 @@ export interface HeroSceneProps {
 }
 
 /* Сетки гребней и снег считаются один раз на модуль: сцена детерминирована. */
-const FAR = ridgeMesh(RIDGE_FAR, FAR_BASE_Y, SCENE_BOX, FAR_FACET_WIDTH);
-const MID = ridgeMesh(RIDGE_MID, MID_BASE_Y, SCENE_BOX, MID_FACET_WIDTH);
-const NEAR = ridgeMesh(RIDGE_NEAR, NEAR_BASE_Y, SCENE_BOX, NEAR_FACET_WIDTH);
+const FAR = ridgeMesh(RIDGE_FAR, FAR_BASE_Y, SCENE_BOX, FAR_MESH);
+const MID = ridgeMesh(RIDGE_MID, MID_BASE_Y, SCENE_BOX, MID_MESH);
+const NEAR = ridgeMesh(RIDGE_NEAR, NEAR_BASE_Y, SCENE_BOX, NEAR_MESH);
 const SNOW = snowBandPath(SNOW_LINE_Y, SNOW_WOBBLE, SNOW_SEED);
 
 /** Облака: ширина (% героя), высота положения (% сцены), период и сдвиг фазы. */
@@ -46,7 +47,7 @@ const CLOUDS = [
 /** Светило: справа от главного массива, над гребнями — свет на гранях идёт оттуда же. */
 const LUMINARY = { cx: 1010, cy: 64, r: 15 };
 
-/** Целочисленный хэш → [0, 1): позиции звёзд и капель без решётки и диагональных «строчек». */
+/** Целочисленный хэш → [0, 1): позиции звёзд, огней и капель без решётки и диагональных «строчек». */
 function hash01(seed: number, i: number): number {
   let h = (Math.imul(seed, 374761393) + Math.imul(i, 668265263)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -54,16 +55,67 @@ function hash01(seed: number, i: number): number {
   return (h >>> 0) / 4294967296;
 }
 
+function r1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 /**
  * Звёзды ясной ночи: в полосе между зоной текста героя (верхние ~50 единиц
  * сцены на десктопе) и линией хребта; статичные — никакого мерцания.
  */
 const STARS = Array.from({ length: 22 }, (_, i) => ({
-  x: Math.round(hash01(7, i * 3) * SCENE_BOX.width * 10) / 10,
-  y: Math.round((54 + hash01(7, i * 3 + 1) * 56) * 10) / 10,
-  r: Math.round((0.6 + hash01(7, i * 3 + 2) * 0.8) * 10) / 10,
+  x: r1(hash01(7, i * 3) * SCENE_BOX.width),
+  y: r1(54 + hash01(7, i * 3 + 1) * 56),
+  r: r1(0.6 + hash01(7, i * 3 + 2) * 0.8),
   opacity: Math.round((0.35 + hash01(9, i) * 0.5) * 100) / 100,
 }));
+
+/**
+ * Огни города у подножия: Алматы лежит под хребтом, к зрителю. Точки в
+ * нижней полосе сцены, гуще к центру; несколько крупных — проспекты.
+ * Рисуются под слоями смога, поэтому в грязный воздух тускнеют и тонут.
+ */
+const CITY_LIGHTS = Array.from({ length: 84 }, (_, i) => {
+  const spread = 0.55 + 0.45 * hash01(13, i * 4 + 3);
+  const big = i % 14 === 0;
+  return {
+    x: r1(SCENE_BOX.width * (0.5 + (hash01(13, i * 4) - 0.5) * spread)),
+    y: r1(NEAR_BASE_Y - 30 + hash01(13, i * 4 + 1) * 26),
+    r: r1(big ? 1.9 + hash01(13, i * 4 + 2) : 0.7 + hash01(13, i * 4 + 2) * 0.9),
+    opacity: Math.round((big ? 0.9 : 0.45 + hash01(15, i) * 0.5) * 100) / 100,
+  };
+});
+
+/**
+ * Тянь-шаньские ели на ближнем склоне: стоят точно на low-poly-силуэте,
+ * группами по краям (центр оставлен массиву). Силуэт из трёх ярусов.
+ */
+function spruce(x: number, base: number, h: number): string {
+  const w = h * 0.34;
+  const p = (dx: number, dy: number) => `${r1(x + dx)} ${r1(base - dy)}`;
+  return (
+    `M${p(0, h)} L${p(w * 0.55, h * 0.64)} L${p(w * 0.3, h * 0.64)} L${p(w * 0.82, h * 0.34)} ` +
+    `L${p(w * 0.5, h * 0.34)} L${p(w, 0)} L${p(-w, 0)} L${p(-w * 0.5, h * 0.34)} ` +
+    `L${p(-w * 0.82, h * 0.34)} L${p(-w * 0.3, h * 0.64)} L${p(-w * 0.55, h * 0.64)} Z`
+  );
+}
+
+const SPRUCE_ZONES: readonly [number, number][] = [
+  [20, 330],
+  [1010, 1420],
+];
+const SPRUCES = SPRUCE_ZONES.flatMap(([from, to], z) =>
+  Array.from({ length: 12 }, (_, i) => {
+    const x = from + (to - from) * hash01(21 + z, i * 2);
+    const h = 13 + 17 * hash01(21 + z, i * 2 + 1);
+    return spruce(x, silhouetteAt(NEAR.vertices, x) + 1.5, h);
+  }),
+);
+
+/** Телебашня на Кок-Тобе — самый узнаваемый силуэт над городом; стоит на ближнем гребне. */
+const TOWER_X = 1236;
+const TOWER_BASE = silhouetteAt(NEAR.vertices, TOWER_X) + 1;
+const TOWER_H = 68;
 
 /** Дождь/снег: детерминированный набор капель (x в % ширины, y в % половины слоя, d — «глубина» 0…2). */
 function precipitation(count: number, seed: number): { x: number; y: number; d: number }[] {
@@ -112,20 +164,14 @@ function FogBank({ color }: { color: string }) {
 }
 
 /**
- * Гребень low-poly: под базовой линией — тело теневым тоном, выше —
+ * Гребень low-poly: под ломаной базовых точек — тело теневым тоном, выше —
  * треугольники сетки тремя тонами. Обводка в цвет заливки (0.8 px) гасит
  * волоски антиалиасинга на общих рёбрах соседних треугольников.
  */
 function Ridge({ mesh, tones }: { mesh: RidgeMesh; tones: Record<Tone, string> }) {
   return (
     <>
-      <rect
-        x={0}
-        y={mesh.baseY}
-        width={SCENE_BOX.width}
-        height={Math.max(0, SCENE_BOX.height - mesh.baseY)}
-        fill={tones.shade}
-      />
+      <path d={mesh.baseOutline} fill={tones.shade} />
       {mesh.triangles.map((t) => (
         <path
           key={t.d}
@@ -171,16 +217,19 @@ function RidgeSvg({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Сцена в герое главной: небо (звёзды и луна ночью, солнце днём), облака,
- * три гребня Заилийского Алатау в фасетной подсветке (свет справа, где
- * светило) со снежниками в два тона, дымка между гребнями, смог по AQI
- * (туман и частицы) и осадки по погоде.
+ * Сцена в герое главной: небо (звёзды, луна с ореолом ночью, солнце
+ * днём, редкая падающая звезда), облака, три гребня Заилийского Алатау
+ * low-poly-сеткой (свет справа, где светило) со снежниками в два тона,
+ * ели и телебашня Кок-Тобе на ближнем склоне, огни города у подножия,
+ * дымка между гребнями, смог по AQI (туман и частицы) и осадки по погоде.
+ * Ночные элементы (звёзды, луна, огни) в светлой теме прозрачны — там
+ * сцена дневная.
  *
  * Движение — только transform на отдельных слоях-div с will-change
  * (композитор, без перерисовок): облака плывут, дымка «дышит», частицы
- * дрейфуют, дождь и снег падают. rAF и canvas не используются. Вне
- * экрана слои на паузе (SceneMotion), при prefers-reduced-motion —
- * статичный кадр с облаками на «позициях покоя».
+ * дрейфуют, дождь и снег падают, падающая звезда — короткая вспышка раз
+ * в полминуты. rAF и canvas не используются. Вне экрана слои на паузе
+ * (SceneMotion), при prefers-reduced-motion — статичный кадр.
  *
  * Слой позиционируется absolute к низу героя (relative + isolate +
  * overflow-hidden), -z-10 уводит его под текст.
@@ -210,7 +259,7 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
     >
       <SceneMotion />
 
-      {/* Небо: звёзды и луна ясной ночью (звёзды в светлой теме прозрачны), солнце днём. */}
+      {/* Небо: звёзды и луна с плоским ореолом ясной ночью, солнце днём. */}
       <RidgeSvg>
         {!isDay &&
           clearSky &&
@@ -219,14 +268,22 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
           ))}
         {clearSky &&
           (isDay ? (
-            <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 1} fill="var(--sun)" />
+            <>
+              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 22} fill="var(--sun)" opacity={0.08} />
+              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 10} fill="var(--sun)" opacity={0.12} />
+              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 1} fill="var(--sun)" />
+            </>
           ) : (
             <>
+              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 20} fill="var(--moon)" opacity={0.05} />
+              <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r + 9} fill="var(--moon)" opacity={0.07} />
               <circle cx={LUMINARY.cx} cy={LUMINARY.cy} r={LUMINARY.r} fill="var(--moon)" />
               <circle cx={LUMINARY.cx + 6} cy={LUMINARY.cy - 4} r={LUMINARY.r - 2} fill="var(--surface)" />
             </>
           ))}
       </RidgeSvg>
+
+      {!isDay && clearSky && <div className="scene-shooting-star absolute" />}
 
       {CLOUDS.slice(0, scene.clouds).map((c, i) => (
         <div
@@ -287,8 +344,24 @@ export function HeroScene({ aqi, weather }: HeroSceneProps) {
         </div>
       )}
 
+      {/* Ближний гребень, ели и башня на нём, огни города у подножия */}
       <RidgeSvg>
         <Ridge mesh={NEAR} tones={NEAR_TONES} />
+        <g fill="var(--spruce)">
+          {SPRUCES.map((d) => (
+            <path key={d} d={d} />
+          ))}
+          <rect x={TOWER_X - 1.6} y={TOWER_BASE - TOWER_H} width={3.2} height={TOWER_H} />
+          <rect x={TOWER_X - 6} y={TOWER_BASE - TOWER_H * 0.62} width={12} height={6} />
+          <rect x={TOWER_X - 4} y={TOWER_BASE - TOWER_H * 0.44} width={8} height={4} />
+          <path
+            d={`M${TOWER_X - 9} ${TOWER_BASE} L${TOWER_X - 1.6} ${TOWER_BASE - 18} L${TOWER_X + 1.6} ${TOWER_BASE - 18} L${TOWER_X + 9} ${TOWER_BASE} Z`}
+          />
+        </g>
+        <circle cx={TOWER_X} cy={TOWER_BASE - TOWER_H - 1.5} r={2.2} fill="var(--tower-light)" />
+        {CITY_LIGHTS.map((l, i) => (
+          <circle key={i} cx={l.x} cy={l.y} r={l.r} fill="var(--city-light)" opacity={l.opacity} />
+        ))}
       </RidgeSvg>
 
       {fog > 0 && (

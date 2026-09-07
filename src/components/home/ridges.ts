@@ -74,23 +74,46 @@ function fmt(value: number): string {
   return String(Math.round(value * 10) / 10);
 }
 
+/** Высота рельефа гребня в произвольной точке x (та же формула, что у профиля). */
+export function profileValue(spec: RidgeSpec, x: number, box = SCENE_BOX): number {
+  let y = spec.baseY - spec.amplitude * fbm(spec.seed, x / spec.cell, spec.octaves, spec.ridged);
+  for (const m of spec.massifs) {
+    const d = (x - m.x) / m.width;
+    y -= m.height * Math.exp(-d * d);
+  }
+  return Math.min(box.height - 4, Math.max(4, y));
+}
+
 /** Профиль гребня: y для каждого x = 0, step, 2·step, …, width. */
 export function ridgeProfile(spec: RidgeSpec, box = SCENE_BOX): number[] {
   const ys: number[] = [];
-  for (let x = 0; x <= box.width; x += spec.step) {
-    let y = spec.baseY - spec.amplitude * fbm(spec.seed, x / spec.cell, spec.octaves, spec.ridged);
-    for (const m of spec.massifs) {
-      const d = (x - m.x) / m.width;
-      y -= m.height * Math.exp(-d * d);
-    }
-    ys.push(Math.min(box.height - 4, Math.max(4, y)));
-  }
+  for (let x = 0; x <= box.width; x += spec.step) ys.push(profileValue(spec, x, box));
   return ys;
 }
 
 export interface Point {
   x: number;
   y: number;
+}
+
+/** Хэш → [0, 1) для разброса базовых точек и расколов (детерминирован). */
+function hash01(seed: number, i: number): number {
+  return lattice(seed * 31 + 17, i);
+}
+
+/** y low-poly-силуэта (ломаной по вершинам) в точке x — чтобы ставить объекты точно на гребень. */
+export function silhouetteAt(vertices: readonly Point[], x: number): number {
+  if (vertices.length === 0) return 0;
+  if (x <= vertices[0].x) return vertices[0].y;
+  for (let i = 1; i < vertices.length; i += 1) {
+    const a = vertices[i - 1];
+    const b = vertices[i];
+    if (x <= b.x) {
+      const t = b.x === a.x ? 0 : (x - a.x) / (b.x - a.x);
+      return a.y + (b.y - a.y) * t;
+    }
+  }
+  return vertices[vertices.length - 1].y;
 }
 
 /**
@@ -167,9 +190,22 @@ export interface Triangle {
 
 export interface RidgeMesh {
   triangles: Triangle[];
-  /** Контур гребня до земли — для clipPath снега и тела под базовой линией. */
+  /** Контур гребня до земли — для clipPath снега. */
   outline: string;
+  /** Тело под ломаной базовых точек до земли — заливается теневым тоном под сеткой. */
+  baseOutline: string;
+  /** Вершины силуэта — чтобы ставить объекты (ели, башню) точно на гребень. */
+  vertices: Point[];
   baseY: number;
+}
+
+export interface MeshOptions {
+  /** Минимальная ширина грани (см. ridgeVertices). */
+  minWidth?: number;
+  /** Насколько базовые точки могут подниматься над baseY — ломает ровную «зубчатую полосу». */
+  jitter?: number;
+  /** Встречные треугольники шире этого раскалываются на три — сетка перестаёт быть обоями. */
+  splitWidth?: number;
 }
 
 function tri(a: Point, b: Point, c: Point): string {
@@ -177,28 +213,50 @@ function tri(a: Point, b: Point, c: Point): string {
 }
 
 /**
- * Low-poly-сетка гребня. Вершины силуэта V₀…Vₙ; базовые точки Bᵢ — на
- * линии baseY посередине между соседними вершинами, плюс крайние на x = 0
- * и x = width. Под каждым отрезком гребня — треугольник (Vᵢ, Vᵢ₊₁, Bᵢ):
- * склон спускается вправо → обращён к свету (светило справа) → lit, иначе
- * shade. Между ними встречные треугольники (Vᵢ, Bᵢ₋₁, Bᵢ) средним тоном.
- * Вместе они без зазоров замощают полосу между силуэтом и базовой линией.
+ * Low-poly-сетка гребня. Вершины силуэта V₀…Vₙ; базовые точки Bᵢ —
+ * между соседними вершинами на высоте baseY минус случайный подъём
+ * (jitter), плюс крайние на x = 0 и x = width точно на baseY. Под каждым
+ * отрезком гребня — треугольник (Vᵢ, Vᵢ₊₁, Bᵢ): склон спускается вправо →
+ * обращён к свету (светило справа) → lit, иначе shade. Между ними встречные
+ * треугольники (Vᵢ, Bᵢ₋₁, Bᵢ) средним тоном; широкие раскалываются точкой
+ * над базовым ребром на тень / свет / средний. Вместе они без зазоров
+ * замощают полосу между силуэтом и ломаной базовых точек.
  */
 export function ridgeMesh(
   spec: RidgeSpec,
   baseY: number,
   box = SCENE_BOX,
-  minWidth = 40,
+  options: MeshOptions = {},
 ): RidgeMesh {
+  const { minWidth = 40, jitter = 0, splitWidth = Infinity } = options;
   const v = ridgeVertices(spec, box, minWidth);
   const n = v.length;
   const bases: Point[] = [{ x: 0, y: baseY }];
-  for (let i = 0; i < n - 1; i += 1) bases.push({ x: (v[i].x + v[i + 1].x) / 2, y: baseY });
+  for (let i = 0; i < n - 1; i += 1) {
+    const span = v[i + 1].x - v[i].x;
+    const x = (v[i].x + v[i + 1].x) / 2 + (hash01(spec.seed, i * 2) - 0.5) * span * 0.35;
+    const floor = Math.max(v[i].y, v[i + 1].y) + 6;
+    const y = Math.max(floor, baseY - jitter * hash01(spec.seed, i * 2 + 1));
+    bases.push({ x, y: Math.min(baseY, y) });
+  }
   bases.push({ x: box.width, y: baseY });
 
   const triangles: Triangle[] = [];
   for (let i = 0; i < n; i += 1) {
-    triangles.push({ d: tri(v[i], bases[i], bases[i + 1]), tone: 'mid', crest: false });
+    const a = bases[i];
+    const b = bases[i + 1];
+    if (b.x - a.x > splitWidth) {
+      const floor = v[i].y + 6;
+      const m: Point = {
+        x: (a.x + b.x) / 2 + (hash01(spec.seed, 900 + i) - 0.5) * (b.x - a.x) * 0.3,
+        y: Math.max(floor, Math.min(a.y, b.y) - 6 - 12 * hash01(spec.seed, 1800 + i)),
+      };
+      triangles.push({ d: tri(v[i], a, m), tone: 'shade', crest: false });
+      triangles.push({ d: tri(v[i], m, b), tone: 'lit', crest: false });
+      triangles.push({ d: tri(a, m, b), tone: 'mid', crest: false });
+    } else {
+      triangles.push({ d: tri(v[i], a, b), tone: 'mid', crest: false });
+    }
   }
   for (let i = 0; i < n - 1; i += 1) {
     const lit = v[i + 1].y > v[i].y;
@@ -208,8 +266,11 @@ export function ridgeMesh(
   const outline =
     v.map((p, i) => `${i === 0 ? 'M' : 'L'}${fmt(p.x)} ${fmt(p.y)}`).join(' ') +
     ` L${box.width} ${box.height} L0 ${box.height} Z`;
+  const baseOutline =
+    bases.map((p, i) => `${i === 0 ? 'M' : 'L'}${fmt(p.x)} ${fmt(p.y)}`).join(' ') +
+    ` L${box.width} ${box.height} L0 ${box.height} Z`;
 
-  return { triangles, outline, baseY };
+  return { triangles, outline, baseOutline, vertices: v, baseY };
 }
 
 /**
@@ -282,10 +343,10 @@ export const FAR_BASE_Y = 206;
 export const MID_BASE_Y = 244;
 export const NEAR_BASE_Y = 262;
 
-/** Минимальная ширина грани: дальний хребет — мелкие острые грани, ближний — крупные. */
-export const FAR_FACET_WIDTH = 34;
-export const MID_FACET_WIDTH = 60;
-export const NEAR_FACET_WIDTH = 96;
+/** Параметры сеток: дальний хребет — мелкие острые грани, ближний — крупные. */
+export const FAR_MESH: MeshOptions = { minWidth: 34, jitter: 16, splitWidth: 58 };
+export const MID_MESH: MeshOptions = { minWidth: 60, jitter: 12, splitWidth: 88 };
+export const NEAR_MESH: MeshOptions = { minWidth: 96, jitter: 0, splitWidth: 130 };
 
 /** Линия снега дальнего хребта: выше неё (меньше y) склоны белые. */
 export const SNOW_LINE_Y = 100;

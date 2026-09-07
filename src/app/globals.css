@@ -32,27 +32,31 @@
   --border: #E5E3DB;
   --accent: #2557C7;
 
-  /* --- Сцена в герое (HeroScene): светлая тема — день в дымке ---
-     Каждый гребень в двух тонах: освещённый склон (lit, свет справа) и
-     теневой (shade); дальний — светлее и синее (воздушная перспектива),
-     ближний — темнее. Снег тоже двухтоновый. Смог — тёплый серый, чтобы
-     читался на холодных горах. */
-  --ridge-far-lit: #CDD5E2;
-  --ridge-far-mid: #BFC8D7;
-  --ridge-far-shade: #AFB9CC;
-  --ridge-mid-lit: #A6B1C5;
-  --ridge-mid-mid: #97A2B8;
-  --ridge-mid-shade: #8591A9;
-  --ridge-near-lit: #808CA2;
-  --ridge-near-mid: #737F95;
-  --ridge-near-shade: #657186;
+  /* --- Сцена в герое (HeroScene): светлая тема — день ---
+     Каждый гребень в трёх тонах: освещённый склон (lit, свет справа),
+     средний и теневой; дальний — светлее и синее (воздушная перспектива),
+     ближний — тёмный и контрастный к кремовому небу. Ночные элементы
+     (звёзды, луна, огни города) в светлой теме прозрачны. Смог — тёплый
+     серый, чтобы читался на холодных горах. */
+  --ridge-far-lit: #BAC7DB;
+  --ridge-far-mid: #A8B6CC;
+  --ridge-far-shade: #96A5BD;
+  --ridge-mid-lit: #8F9DB6;
+  --ridge-mid-mid: #7E8CA6;
+  --ridge-mid-shade: #6D7B95;
+  --ridge-near-lit: #66728C;
+  --ridge-near-mid: #58647D;
+  --ridge-near-shade: #4B566B;
   --snow-lit: #FFFFFF;
-  --snow-shade: #DAE1EC;
-  --mist: #E6EAF1;
+  --snow-shade: #D8E2EF;
+  --mist: #EEF1F6;
   --star: transparent;
-  --moon: #CBD1DC;
-  --sun: #F0CF6E;
-  --cloud: #E8EBF1;
+  --moon: transparent;
+  --sun: #F3CC66;
+  --cloud: #E2E6ED;
+  --city-light: transparent;
+  --spruce: #38435A;
+  --tower-light: #D9533F;
   --smog: #ADA391;
   --smog-particle: #7F7664;
   --rain: #93A3B3;
@@ -88,6 +92,9 @@
   --dark-moon: #DCE1EA;
   --dark-sun: #E9D48A;
   --dark-cloud: #2C3346;
+  --dark-city-light: #F2C98A;
+  --dark-spruce: #0E121A;
+  --dark-tower-light: #FF5A45;
   --dark-smog: #8A8376;
   --dark-smog-particle: #B8B0A2;
   --dark-rain: #6E7B8B;
@@ -129,6 +136,9 @@
   --smog: var(--dark-smog);
   --smog-particle: var(--dark-smog-particle);
   --cloud: var(--dark-cloud);
+  --city-light: var(--dark-city-light);
+  --spruce: var(--dark-spruce);
+  --tower-light: var(--dark-tower-light);
   --rain: var(--dark-rain);
   --snowflake: var(--dark-snowflake);
 }
@@ -164,6 +174,9 @@
     --smog: var(--dark-smog);
     --smog-particle: var(--dark-smog-particle);
     --cloud: var(--dark-cloud);
+    --city-light: var(--dark-city-light);
+    --spruce: var(--dark-spruce);
+    --tower-light: var(--dark-tower-light);
     --rain: var(--dark-rain);
     --snowflake: var(--dark-snowflake);
   }
@@ -321,6 +334,45 @@
 
 .scene-snowflake {
   background-color: var(--snowflake);
+}
+
+/* Падающая звезда: тонкая чёрточка над левой частью хребта; без анимации
+   (reduced motion) невидима. Цвет — --star, в светлой теме прозрачна. */
+.scene-shooting-star {
+  top: 12%;
+  left: 34%;
+  width: 84px;
+  height: 1px;
+  background-color: var(--star);
+  opacity: 0;
+  transform: rotate(-26deg);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Вспышка занимает 3% из 27-секундного цикла — «редкая самозавершающаяся». */
+  @keyframes scene-shooting {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) rotate(-26deg);
+    }
+    0.6% {
+      opacity: 0.9;
+    }
+    3% {
+      opacity: 0;
+      transform: translate(-240px, 118px) rotate(-26deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-240px, 118px) rotate(-26deg);
+    }
+  }
+
+  .scene-shooting-star {
+    animation: scene-shooting 27s linear infinite;
+    animation-delay: 6s;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
