@@ -569,38 +569,42 @@ function SrOnlyTable({
   variant: AqiChartVariant;
 }) {
   return (
-    <table className="sr-only">
-      {/* sr-only на самой таблице caption не прячет: overflow/clip применяются
-          к table box, а caption живёт в table wrapper box снаружи — без
-          собственного sr-only подпись всплывала поверх подписи под графиком. */}
-      <caption className="sr-only">
-        {variant === 'forecast'
-          ? 'Прогноз AQI по часам на 48 часов'
-          : win === '24h'
-            ? 'Значения AQI по часам за 24 часа'
-            : `Худший час каждого дня ${WINDOW_LABEL[win]}`}
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">Время</th>
-          <th scope="col">AQI</th>
-          <th scope="col">Категория</th>
-          <th scope="col">PM2.5, мкг/м³</th>
-          <th scope="col">PM10, мкг/м³</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((p) => (
-          <tr key={p.time}>
-            <th scope="row">{TOOLTIP_FULL_FMT.format(p.date)}</th>
-            <td>{p.aqi !== null ? p.aqi : 'нет данных'}</td>
-            <td>{p.aqi !== null ? aqiCategory(p.aqi).labelRu : '—'}</td>
-            <td>{p.pm25 !== null ? CONCENTRATION_FMT.format(p.pm25) : '—'}</td>
-            <td>{p.pm10 !== null ? CONCENTRATION_FMT.format(p.pm10) : '—'}</td>
+    /* Обёртка-div, а не sr-only на самой <table>: overflow: hidden на table-боксе
+       ширину не режет — таблица шириной ~450px раздвигала документ и давала
+       горизонтальный скролл на телефоне. У div overflow работает. */
+    <div className="sr-only">
+      <table>
+        {/* caption живёт в table wrapper box снаружи table box — без
+            собственного sr-only подпись всплывала поверх подписи под графиком. */}
+        <caption className="sr-only">
+          {variant === 'forecast'
+            ? 'Прогноз AQI по часам на 48 часов'
+            : win === '24h'
+              ? 'Значения AQI по часам за 24 часа'
+              : `Худший час каждого дня ${WINDOW_LABEL[win]}`}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Время</th>
+            <th scope="col">AQI</th>
+            <th scope="col">Категория</th>
+            <th scope="col">PM2.5, мкг/м³</th>
+            <th scope="col">PM10, мкг/м³</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.time}>
+              <th scope="row">{TOOLTIP_FULL_FMT.format(p.date)}</th>
+              <td>{p.aqi !== null ? p.aqi : 'нет данных'}</td>
+              <td>{p.aqi !== null ? aqiCategory(p.aqi).labelRu : '—'}</td>
+              <td>{p.pm25 !== null ? CONCENTRATION_FMT.format(p.pm25) : '—'}</td>
+              <td>{p.pm10 !== null ? CONCENTRATION_FMT.format(p.pm10) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -647,7 +651,7 @@ export function AqiAreaChart({
     return (
       <div
         role="status"
-        className="flex min-h-[260px] w-full items-center justify-center rounded-2xl border border-dashed border-border bg-card px-6"
+        className="flex min-h-[260px] w-full items-center justify-center rounded-xl border border-dashed border-border bg-card px-6"
       >
         <p className="text-sm text-muted">
           Недостаточно данных для построения графика

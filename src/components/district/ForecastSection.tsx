@@ -53,7 +53,7 @@ export function ForecastSection({ forecast, className = '' }: ForecastSectionPro
       {forecast.points.length === 0 ? (
         <div
           role="status"
-          className="mt-4 rounded-2xl border border-dashed border-border bg-card px-6 py-10 text-center"
+          className="mt-4 rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center"
         >
           <p className="text-base font-semibold">Прогноз пока недоступен</p>
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted">

@@ -110,7 +110,7 @@ function stationBadgeAqi(station: StationReading): number | null {
 
 function StationCard({ station }: { station: StationReading }) {
   return (
-    <li className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
+    <li className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold leading-snug">{station.name}</h3>
@@ -194,10 +194,10 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         {DISTRICT_DESCRIPTIONS[slug]}
       </p>
 
-      <section aria-label="Текущее качество воздуха" className="mt-6 space-y-3">
+      <section aria-label="Текущее качество воздуха" className="mt-6">
         <CurrentAirCard air={air} trend={trend} />
-        <AdviceCard aqi={air?.aqi ?? null} />
-        <PushSubscribeCard slug={slug} />
+        <AdviceCard aqi={air?.aqi ?? null} className="mt-5" />
+        <PushSubscribeCard slug={slug} className="mt-6" />
       </section>
 
       <section aria-labelledby="history-heading" className="mt-10">
@@ -207,7 +207,7 @@ export default async function DistrictPage({ params }: DistrictPageProps) {
         {historyEmpty ? (
           <div
             role="status"
-            className="mt-4 rounded-2xl border border-dashed border-border bg-card px-6 py-10 text-center"
+            className="mt-4 rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center"
           >
             <p className="text-base font-semibold">История пока недоступна</p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted">

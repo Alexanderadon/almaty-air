@@ -184,7 +184,7 @@ export function PushSubscribeCard({ slug, className = '' }: PushSubscribeCardPro
   return (
     <section
       aria-label="Push-уведомления о качестве воздуха"
-      className={`rounded-2xl border border-border bg-card p-5 ${className}`}
+      className={`rounded-xl border border-border bg-card p-5 ${className}`}
     >
       <p className="text-xs font-semibold uppercase tracking-wider text-muted">
         Уведомления

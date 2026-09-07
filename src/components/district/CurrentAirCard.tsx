@@ -41,7 +41,7 @@ export function CurrentAirCard({ air, trend, className = '' }: CurrentAirCardPro
   const showFooter = air !== null && (air.observedAt !== null || aqi !== null);
 
   return (
-    <div className={`rounded-2xl border border-border bg-card p-5 sm:p-6 ${className}`}>
+    <div className={`rounded-xl border border-border bg-card p-5 sm:p-6 ${className}`}>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
         <AqiBadge aqi={aqi} size="lg" className="shrink-0" />
 

@@ -40,12 +40,6 @@ const SOURCE_META: Record<SourceId, SourceMeta> = {
   },
 };
 
-const TONE_DOT: Record<Tone, string> = {
-  ok: 'bg-emerald-500',
-  error: 'bg-amber-500',
-  off: 'bg-zinc-400',
-};
-
 /**
  * Тон и строка статуса без внутреннего жаргона: жителю не нужны слова
  * «ключ», «API» или коды HTTP — только работает источник или нет.
@@ -59,31 +53,29 @@ function describe(source: SourceStatus): { tone: Tone; text: string } {
 }
 
 /**
- * Статус источников данных: одна понятная строка на источник.
- * Активные — зелёная точка («Модель CAMS (Copernicus) — работает, 8 точек»),
- * неподключённые — нейтрально и приглушённо, без алармизма.
+ * Статус источников данных: строка на источник — название и пояснение слева,
+ * статус словами справа. Состояние несут слова, а не цвет: «временно
+ * недоступны» выделено весом, неподключённые — приглушены, без алармизма.
  */
 export function SourcesStatus({ sources, className = '' }: SourcesStatusProps) {
   return (
-    <ul className={`space-y-3 rounded-2xl border border-border bg-card p-4 ${className}`}>
+    <ul className={`divide-y divide-border border-y border-border ${className}`}>
       {sources.map((source) => {
         const meta = SOURCE_META[source.id];
         const { tone, text } = describe(source);
         const off = tone === 'off';
         return (
-          <li key={source.id} className="flex items-start gap-2.5">
-            <span
-              aria-hidden="true"
-              className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_DOT[tone]}`}
-            />
+          <li
+            key={source.id}
+            className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3"
+          >
             <div className="min-w-0">
-              <p className={`text-sm ${off ? 'text-muted' : ''}`}>
-                <span className={off ? undefined : 'font-medium'}>{meta.name}</span>
-                {' — '}
-                {text}
-              </p>
+              <p className={`text-sm ${off ? 'text-muted' : 'font-medium'}`}>{meta.name}</p>
               <p className="text-xs text-muted">{meta.note}</p>
             </div>
+            <p className={`text-sm tabular-nums ${tone === 'error' ? 'font-medium' : 'text-muted'}`}>
+              {text}
+            </p>
           </li>
         );
       })}

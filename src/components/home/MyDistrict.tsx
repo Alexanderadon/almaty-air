@@ -38,7 +38,7 @@ export function MyDistrict({ districts, className = '' }: MyDistrictProps) {
     <Link
       href={`/district/${slug}`}
       className={
-        'flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 ' +
+        'flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 ' +
         'hover:border-accent motion-safe:transition-[border-color,opacity] ' +
         'motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0,0,1)] ' +
         `motion-safe:starting:opacity-0 ${className}`

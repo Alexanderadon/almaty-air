@@ -13,7 +13,7 @@ export function ErrorState({
   return (
     <div
       role="status"
-      className={`flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-card px-6 py-10 text-center ${className}`}
+      className={`flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center ${className}`}
     >
       <svg
         viewBox="0 0 24 24"

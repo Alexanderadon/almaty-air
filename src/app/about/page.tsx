@@ -58,7 +58,7 @@ export default function AboutPage() {
           Три слоя данных
         </h2>
         <div className="mt-4 space-y-3">
-          <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="text-sm font-semibold">Станции мониторинга</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted">
               Сеть сенсоров AirGradient по всему городу — данные приходят через
@@ -66,7 +66,7 @@ export default function AboutPage() {
               Это измерения концентраций PM2.5 в конкретных точках Алматы.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="text-sm font-semibold">Официальные посты</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted">
               Посты наблюдений Казгидромета и монитор посольства США — через
@@ -74,7 +74,7 @@ export default function AboutPage() {
               Дополнительный независимый слой измерений.
             </p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="text-sm font-semibold">Модель CAMS (Copernicus)</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted">
               Глобальная модель атмосферы{' '}

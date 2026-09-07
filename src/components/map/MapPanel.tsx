@@ -103,7 +103,7 @@ export function MapPanel({ districts, stations, className = '' }: MapPanelProps)
 
   return (
     <div className={className}>
-      <div className="relative isolate z-0 h-[420px] overflow-hidden rounded-2xl border border-border bg-card md:h-[520px]">
+      <div className="relative isolate z-0 h-[420px] overflow-hidden rounded-xl border border-border bg-card md:h-[520px]">
         <AirMap districts={districts} stations={stations} />
       </div>
 

@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import { cache, type CSSProperties } from 'react';
 import { AnimatedAqi } from '@/components/home/AnimatedAqi';
 import { citySourceSummary } from '@/components/home/citySource';
-import { DistrictCard } from '@/components/home/DistrictCard';
-import { DistrictRanking } from '@/components/home/DistrictRanking';
+import { DistrictList } from '@/components/home/DistrictList';
 import { FaqSection } from '@/components/home/FaqSection';
 import { HeroSkyline } from '@/components/home/HeroSkyline';
 import { MyDistrict } from '@/components/home/MyDistrict';
@@ -26,6 +25,7 @@ import { aqiCategory } from '@/lib/aqi';
 import { assertSourcesUpDuringBuild } from '@/lib/build-guard';
 import { DISTRICTS } from '@/lib/districts';
 import { getCityAir, getDistrictHistory } from '@/lib/sources';
+import type { DistrictSlug, HourlyPoint } from '@/lib/types';
 
 export const revalidate = 3600;
 
@@ -33,8 +33,6 @@ export const revalidate = 3600;
 const getCityAirCached = cache(getCityAir);
 
 const PM_FMT = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
-
-const NAME_BY_SLUG = new Map(DISTRICTS.map((d) => [d.slug, d.nameRu]));
 
 export async function generateMetadata(): Promise<Metadata> {
   // title не задаём: главная использует поисковый title.default из layout
@@ -62,7 +60,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Home() {
   // История за 24 часа для спарклайнов — параллельно с текущими значениями.
   // Спарклайн — прогрессивное улучшение: сбой истории района отдаёт
-  // undefined, и его карточка рендерится ровно как раньше.
+  // undefined, и его строка рендерится без спарклайна.
   const [air, sparkEntries] = await Promise.all([
     getCityAirCached(),
     Promise.all(
@@ -76,7 +74,7 @@ export default async function Home() {
       }),
     ),
   ]);
-  const sparkBySlug = new Map(sparkEntries);
+  const sparks = new Map<DistrictSlug, HourlyPoint[] | undefined>(sparkEntries);
   const allSourcesFailed = air.sources.every((s) => !s.ok);
 
   // Данных нет и все источники упали — честная ошибка вместо пустого героя и карты.
@@ -86,13 +84,10 @@ export default async function Home() {
     return (
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 md:py-10">
         <ErrorState />
-        <section aria-labelledby="sources-heading" className="mt-10">
-          <h2 id="sources-heading" className="text-lg font-semibold tracking-tight">
+        <section aria-labelledby="sources-heading" className="mt-12">
+          <h2 id="sources-heading" className="text-xl font-semibold tracking-tight">
             Источники данных
           </h2>
-          <p className="mt-1 text-sm text-muted">
-            Сайт всегда показывает, откуда взято каждое число.
-          </p>
           <SourcesStatus sources={air.sources} className="mt-4" />
         </section>
       </main>
@@ -113,58 +108,55 @@ export default async function Home() {
       <JsonLd data={webApplicationJsonLd()} />
       <JsonLd data={faqPageJsonLd(FAQ_ITEMS)} />
 
-      {/* Герой: индекс по городу на фоне силуэта Заилийского Алатау.
-          --hero-tint — цвет текущей категории AQI: фон тихо меняется вместе
-          с состоянием воздуха. relative + isolate + overflow-hidden держат
-          силуэт под текстом и не дают ему создать горизонтальный скролл. */}
-      <section aria-labelledby="hero-heading">
-        <div
-          className="relative isolate overflow-hidden"
-          style={{ '--hero-tint': category?.color ?? 'var(--accent)' } as CSSProperties}
-        >
-          <HeroSkyline />
-          <div className="flex flex-col gap-6 pb-10 md:flex-row md:items-center md:pb-12">
-            <AnimatedAqi value={aqi}>
-              <AqiBadge aqi={aqi} size="lg" className="self-start" />
-            </AnimatedAqi>
-            <div className="min-w-0 flex-1">
-              <h1 id="hero-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
-                Качество воздуха в Алматы
-              </h1>
-              {category !== null ? (
-                <p className="mt-2 text-lg">
-                  Сейчас — {category.labelRu.toLowerCase()}
-                  {air.citywide.pm25 !== null && (
-                    <span className="text-muted">
-                      {' '}
-                      · PM2.5 {PM_FMT.format(air.citywide.pm25)} мкг/м³
-                    </span>
-                  )}
-                </p>
-              ) : (
-                <p className="mt-2 text-lg text-muted">Текущих данных по городу пока нет.</p>
-              )}
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                <UpdatedAt iso={air.updatedAt} />
-                {heroSource !== null && (
-                  <SourceNote
-                    origin={heroSource.origin}
-                    stationCount={heroSource.stationCount}
-                  />
+      {/* Герой: индекс по городу, состояние словами и совет — одним блоком
+          на фоне силуэта Заилийского Алатау. --hero-tint — цвет текущей
+          категории AQI: фон тихо меняется вместе с состоянием воздуха.
+          relative + isolate + overflow-hidden держат силуэт под текстом
+          и не дают ему создать горизонтальный скролл. */}
+      <section
+        aria-labelledby="hero-heading"
+        className="relative isolate overflow-hidden"
+        style={{ '--hero-tint': category?.color ?? 'var(--accent)' } as CSSProperties}
+      >
+        <HeroSkyline />
+        <div className="flex flex-col gap-6 pb-12 md:flex-row md:items-center md:gap-8 md:pb-14">
+          <AnimatedAqi value={aqi}>
+            <AqiBadge aqi={aqi} size="lg" className="self-start" />
+          </AnimatedAqi>
+          <div className="min-w-0 flex-1">
+            <h1 id="hero-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Качество воздуха в Алматы
+            </h1>
+            {category !== null ? (
+              <p className="mt-2 text-lg">
+                Сейчас — {category.labelRu.toLowerCase()}
+                {air.citywide.pm25 !== null && (
+                  <span className="text-muted">
+                    {' '}
+                    · PM2.5 {PM_FMT.format(air.citywide.pm25)} мкг/м³
+                  </span>
                 )}
-              </div>
+              </p>
+            ) : (
+              <p className="mt-2 text-lg text-muted">Текущих данных по городу пока нет.</p>
+            )}
+            <AdviceCard aqi={aqi} showHeading={false} className="mt-3" />
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <UpdatedAt iso={air.updatedAt} />
+              {heroSource !== null && (
+                <SourceNote origin={heroSource.origin} stationCount={heroSource.stationCount} />
+              )}
             </div>
           </div>
         </div>
-        <AdviceCard aqi={aqi} className="mt-6" />
       </section>
 
       {/* Карта районов и станций */}
-      <section aria-labelledby="map-heading" className="mt-10">
-        <h2 id="map-heading" className="text-lg font-semibold tracking-tight">
+      <section aria-labelledby="map-heading" className="mt-12">
+        <h2 id="map-heading" className="text-xl font-semibold tracking-tight">
           Карта районов и станций
         </h2>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-1.5 text-sm text-muted">
           Заливка района — категория AQI, точки — станции мониторинга. Нажмите на район
           или станцию, чтобы увидеть подробности.
         </p>
@@ -173,53 +165,33 @@ export default async function Home() {
 
       {/* Быстрый доступ «Мой район» — появляется после выбора района на его
           странице (localStorage). Смонтирован вне секции «Районы», чтобы не
-          попадать в подсчёт восьми карточек-ссылок районов. */}
-      <MyDistrict districts={air.districts} className="mt-10" />
+          попадать в подсчёт восьми ссылок районов. */}
+      <MyDistrict districts={air.districts} className="mt-12" />
 
-      {/* Районы */}
-      <section aria-labelledby="districts-heading" className="mt-10">
-        <h2 id="districts-heading" className="text-lg font-semibold tracking-tight">
-          Районы
-        </h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {air.districts.map((district) => (
-            <DistrictCard
-              key={district.slug}
-              district={district}
-              nameRu={NAME_BY_SLUG.get(district.slug) ?? district.slug}
-              spark={sparkBySlug.get(district.slug)}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Рейтинг районов по текущему AQI (сам скрывается, если данных нет) */}
-      <DistrictRanking districts={air.districts} className="mt-10" />
+      {/* Районы: один список по текущему AQI со спарклайнами за 24 часа */}
+      <DistrictList districts={air.districts} sparks={sparks} className="mt-12" />
 
       {/* Легенда шкалы AQI */}
-      <section aria-labelledby="scale-heading" className="mt-10">
-        <h2 id="scale-heading" className="text-lg font-semibold tracking-tight">
+      <section aria-labelledby="scale-heading" className="mt-12">
+        <h2 id="scale-heading" className="text-xl font-semibold tracking-tight">
           Шкала AQI
         </h2>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-1.5 text-sm text-muted">
           Индекс US EPA (ревизия 2024 года); считается из концентраций PM2.5 и PM10.
         </p>
         <AqiScale className="mt-4" />
       </section>
 
       {/* Статус источников */}
-      <section aria-labelledby="sources-heading" className="mt-10">
-        <h2 id="sources-heading" className="text-lg font-semibold tracking-tight">
+      <section aria-labelledby="sources-heading" className="mt-12">
+        <h2 id="sources-heading" className="text-xl font-semibold tracking-tight">
           Источники данных
         </h2>
-        <p className="mt-1 text-sm text-muted">
-          Сайт всегда показывает, откуда взято каждое число.
-        </p>
         <SourcesStatus sources={air.sources} className="mt-4" />
       </section>
 
       {/* FAQ о воздухе в Алматы */}
-      <FaqSection className="mt-10" />
+      <FaqSection className="mt-12" />
     </main>
   );
 }

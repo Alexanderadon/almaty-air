@@ -12,17 +12,17 @@ export interface AqiBadgeProps {
 
 const SIZES: Record<AqiBadgeSize, { root: string; value: string; label: string }> = {
   sm: {
-    root: 'gap-x-1.5 rounded-full px-2.5 py-0.5',
+    root: 'gap-x-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5',
     value: 'text-sm font-bold',
     label: 'text-xs font-medium',
   },
   md: {
-    root: 'gap-x-2 rounded-xl px-3.5 py-1.5',
+    root: 'gap-x-2 whitespace-nowrap rounded-xl px-3.5 py-1.5',
     value: 'text-xl font-bold',
     label: 'text-sm font-semibold',
   },
   lg: {
-    root: 'flex-col gap-y-1 rounded-3xl px-8 py-6 text-center',
+    root: 'flex-col gap-y-1 rounded-2xl px-8 py-6 text-center',
     value: 'text-6xl font-extrabold leading-none tracking-tight',
     label: 'text-base font-semibold',
   },
