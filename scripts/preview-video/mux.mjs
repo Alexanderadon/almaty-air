@@ -10,9 +10,10 @@ const FFMPEG = "E:/projects/neon-tap/node_modules/ffmpeg-static/ffmpeg.exe";
 const args = process.argv.slice(2);
 const mi = args.indexOf("--music");
 const music = mi >= 0 ? args[mi + 1] : null;
-const cut = args.includes("--cut"); // --cut: трек внутри одного цикла (42 с) с затуханием, без зацикливания под длину песни
-const MUSIC_GAIN = 0.3; // тихо: музыка ~−11 дБ под эффектами
-const OUT = args.find((a, i) => !a.startsWith("--") && i !== mi + 1 && a !== "--cut") || W + (music ? "almaty-air-preview-music.mp4" : "almaty-air-preview.mp4");
+const cut = args.includes("--cut");
+const musicOnly = args.includes("--music-only"); // только музыка, без эффектов (клики/ветер/вжух/свелл) // --cut: трек внутри одного цикла (42 с) с затуханием, без зацикливания под длину песни
+const MUSIC_GAIN = 0.35; // тихо: музыка ~−11 дБ под эффектами
+const OUT = args.find((a, i) => !a.startsWith("--") && i !== mi + 1 && a !== "--cut" && a !== "--music-only") || W + (music ? "almaty-air-preview-music.mp4" : "almaty-air-preview.mp4");
 const { TL, offsetMs = 0 } = JSON.parse(fs.readFileSync(W + "timings.json", "utf8"));
 const CYCLE = TL.loop / 1000;
 const ss = Math.max(0, offsetMs), shift = offsetMs - ss;
@@ -27,6 +28,7 @@ const events = [
   ["whoosh.wav", TL.themeBack + 40, 0.7],
 ];
 // Подложка не генерируется: без --music ролик идёт только с эффектами (клики, ветер, вжух, свелл).
+if (musicOnly) events.length = 0;
 if (music && cut) events.push([music, 0, MUSIC_GAIN]);
 
 const inputs = ["-y", "-ss", (ss / 1000).toFixed(3), "-t", CYCLE.toFixed(3), "-i", W + "raw.mp4"];

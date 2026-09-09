@@ -9,7 +9,8 @@ node gensound.mjs 41800                              # звуковые эффе
 node record.mjs [https://almaty-air-two.vercel.app/] # raw.mp4 + timings.json (герой 12 с → тур вниз 14 с → пауза → назад 6 с → курсор, тема день/ночь)
 node offset.mjs                                      # сдвиг записи по кадру смены темы → timings.json
 node mux.mjs ../../docs/video/preview.mp4            # обрезка в цикл + эффекты (без музыки)
-node mux.mjs out.mp4 --music track.mp3 --cut         # музыка внутри одного цикла 42 с (тихо, затухание 1,5 с) — вариант для сайта
+node mux.mjs out.mp4 --music track.mp3 --cut --music-only  # только музыка, один цикл 42 с, затухание 1,5 с — текущий preview.mp4
+node mux.mjs out.mp4 --music track.mp3 --cut         # музыка + эффекты внутри одного цикла
 node mux.mjs out.mp4 --music track.mp3               # видео зациклено под всю длину трека — полная версия
 ```
 
