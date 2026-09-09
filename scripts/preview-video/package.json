@@ -1,0 +1,1 @@
+{"name":"tsvideo","private":true,"type":"module","dependencies":{"puppeteer-core":"^25.10.0","puppeteer-screen-recorder":"^3.0.6"}}

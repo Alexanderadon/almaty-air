@@ -8,7 +8,7 @@
 
 ![Демо: карта районов, спарклайны, страница района](docs/video/demo.gif)
 
-Полный видео-тур по продукту: [docs/video/tour.mp4](docs/video/tour.mp4) · Скриншот главной: [home-desktop.png](docs/screenshots/home-desktop.png)
+Промо-ролик главной (живой прод, один бесшовный цикл 42 с со звуком): [docs/video/preview.mp4](docs/video/preview.mp4) · Полный видео-тур по продукту: [docs/video/tour.mp4](docs/video/tour.mp4) · Скриншот главной: [home-desktop.png](docs/screenshots/home-desktop.png)
 
 ## Возможности
 
