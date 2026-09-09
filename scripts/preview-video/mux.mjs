@@ -24,7 +24,7 @@ const events = [
   ["click.wav", TL.themeBack, 1.0],
   ["whoosh.wav", TL.themeBack + 40, 0.7],
 ];
-if (!music) events.push(["dombra.wav", 0, 0.42]);
+// Подложка не генерируется: без --music ролик идёт только с эффектами (клики, ветер, вжух, свелл).
 
 const inputs = ["-y", "-ss", (ss / 1000).toFixed(3), "-t", CYCLE.toFixed(3), "-i", W + "raw.mp4"];
 events.forEach(([f]) => inputs.push("-i", W + f));

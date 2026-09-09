@@ -5,11 +5,11 @@
 ```
 cd scripts/preview-video
 npm i puppeteer-core puppeteer-screen-recorder      # один раз; ffmpeg — путь FFMPEG в скриптах
-node gensound.mjs 41800 && node gendombra.mjs 41800  # эффекты + домбровая подложка ровно на цикл
+node gensound.mjs 41800                              # звуковые эффекты (клик, ветер, вжух, свелл)
 node record.mjs [https://almaty-air-two.vercel.app/] # raw.mp4 + timings.json (герой 12 с → тур вниз 14 с → пауза → назад 6 с → курсор, тема день/ночь)
 node offset.mjs                                      # сдвиг записи по кадру смены темы → timings.json
-node mux.mjs ../../docs/video/preview.mp4            # обрезка в цикл + звук
-node mux.mjs out.mp4 --music track.mp3               # свой трек вместо домбры, видео зациклится под его длину
+node mux.mjs ../../docs/video/preview.mp4            # обрезка в цикл + эффекты (без музыки)
+node mux.mjs out.mp4 --music track.mp3               # музыка (файл владельца), видео зациклится под длину трека
 ```
 
 Гочи: рекордер теряет первые десятки–сотни мс — сдвиг всегда измерять (`offset.mjs`);
