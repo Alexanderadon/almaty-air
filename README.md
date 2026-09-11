@@ -1,5 +1,7 @@
 # Воздух Алматы
 
+[![CI](https://github.com/Alexanderadon/almaty-air/actions/workflows/ci.yml/badge.svg)](https://github.com/Alexanderadon/almaty-air/actions/workflows/ci.yml)
+
 **https://almaty-air-two.vercel.app**
 
 **Качество воздуха в Алматы в реальном времени.** Карта районов с текущим AQI, графики за 24 часа / 7 дней / 30 дней, понятная шкала «что это значит» и практические рекомендации.
@@ -88,6 +90,10 @@ pnpm build       # прод-сборка
 
 Данные о качестве воздуха: [Open-Meteo](https://open-meteo.com) (CC-BY 4.0), содержит модифицированные данные Copernicus Atmosphere Monitoring Service; [OpenAQ](https://openaq.org) / AirGradient; [WAQI](https://aqicn.org) / Казгидромет / U.S. Embassy Almaty. Карта: © участники [OpenStreetMap](https://www.openstreetmap.org/copyright).
 
+## Лицензия
+
+Проект распространяется по лицензии [MIT](LICENSE).
+
 ---
 
 ## English
@@ -103,3 +109,7 @@ Stack: Next.js 16 (App Router, RSC, ISR), TypeScript strict, Tailwind v4, Leafle
 ```bash
 pnpm install && pnpm dev   # works out of the box — the model layer needs no API keys
 ```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
